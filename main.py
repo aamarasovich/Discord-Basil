@@ -33,7 +33,10 @@ async def on_ready():
 
 # Load all Cogs from the 'commands' directory
 async def load_cogs():
-    commands_dir = pathlib.Path("commands")
+    # Ensure we use an absolute path to locate the 'commands' directory
+    base_dir = pathlib.Path(__file__).parent
+    commands_dir = base_dir / "commands"
+
     if commands_dir.exists():
         for command_file in commands_dir.glob("*.py"):
             if command_file.stem != "__init__":  # Avoid loading __init__.py
@@ -43,6 +46,8 @@ async def load_cogs():
                     logger.info(f"✅ Loaded cog: {module_name}")
                 except Exception as e:
                     logger.error(f"❌ Failed to load {module_name}: {e}")
+    else:
+        logger.error(f"❌ Commands directory not found: {commands_dir}")
 
 # Start the bot
 async def run_bot():
