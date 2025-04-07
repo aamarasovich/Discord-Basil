@@ -1,9 +1,11 @@
 import os
 import json
 import datetime
+import pytz
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from dateutil import parser  # Don't forget to include `python-dateutil` in requirements.txt
+
 
 def get_upcoming_events():
     # 🌐 Load service account credentials from environment variable
@@ -21,7 +23,8 @@ def get_upcoming_events():
     service = build('calendar', 'v3', credentials=creds)
 
     # 🕓 Define the time window: now through the end of tomorrow
-    now = datetime.datetime.now(datetime.timezone.utc)
+    local_tz = pytz.timezone("America/New_York")
+    now = datetime.datetime.now(local_tz)
     end = now + datetime.timedelta(days=2)
     now_iso = now.isoformat()
     end_iso = end.isoformat()
