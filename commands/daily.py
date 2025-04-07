@@ -1,30 +1,24 @@
 # calendar_utils.py (or top of your main bot file)
-
-import datetime
-import os.path
-import pickle
-
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
-from dateutil import parser  # you'll need to add `python-dateutil` to requirements.txt
-
-SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
+import os
+import json
+from google.oauth2 import service_account
 
 def get_upcoming_events():
     creds = None
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
-            creds = pickle.load(token)
 
-    if not creds or not creds.valid:
-        flow = InstalledAppFlow.from_client_secrets_file(
-            'client_secret_*.json', SCOPES
-        )
-        creds = flow.run_local_server(port=0)
-        with open('token.pickle', 'wb') as token:
-            pickle.dump(creds, token)
+    json_str = os.getenv("GOOGLE_CREDENTIALS_JSON")
+    if not json_str:
+        return "No credentials found 😢"
+
+    creds_dict = json.loads(json_str)
+    creds = service_account.Credentials.from_service_account_info(
+        creds_dict,
+        scopes=['https://www.googleapis.com/auth/calendar.readonly']
+    )
 
     service = build('calendar', 'v3', credentials=creds)
+
+    # Everything else (fetching + formatting) stays the same
 
     now = datetime.datetime.now(datetime.timezone.utc)
     end = now + datetime.timedelta(days=2)
