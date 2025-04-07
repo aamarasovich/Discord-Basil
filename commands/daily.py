@@ -35,6 +35,11 @@ def get_upcoming_events():
 
     events = events_result.get('items', [])
 
+print(f"✅ Basil sees {len(events)} events coming up:")
+for e in events:
+    start = e['start'].get('dateTime', e['start'].get('date'))
+    print(f"• {start} — {e.get('summary')}")
+
     if not events:
         return "You have no events today or tomorrow ✨"
 
