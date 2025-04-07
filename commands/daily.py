@@ -2,6 +2,7 @@ import os
 import json
 import datetime
 import logging
+logging.basicConfig(level=logging.INFO)
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from dateutil import parser
