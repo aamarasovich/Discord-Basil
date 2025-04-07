@@ -7,6 +7,9 @@ from dotenv import load_dotenv
 import pathlib
 import logging  # Added logging
 
+# 👉 NEW: Import the calendar fetcher function
+from commands.daily import get_upcoming_events
+
 # Load environment variables
 load_dotenv()
 
@@ -30,6 +33,13 @@ async def on_ready():
     # Debug: List all registered commands
     command_list = [cmd.name for cmd in bot.commands]
     logger.info(f"🛠 Registered commands: {command_list}")
+
+# 👉 NEW: !daily command using your calendar function
+@bot.command(name="daily")
+async def daily_digest(ctx):
+    await ctx.send("Fetching your calendar events... 📅")
+    events_text = get_upcoming_events()
+    await ctx.send(f"Here’s your upcoming schedule:\n```{events_text}```")
 
 # Load all Cogs from the 'commands' directory
 async def load_cogs():
