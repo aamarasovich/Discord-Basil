@@ -1,4 +1,4 @@
-import os
+import logging
 import json
 import datetime
 from google.oauth2 import service_account
@@ -29,7 +29,6 @@ def get_upcoming_events():
     # 🕵️‍♀️ Check which calendars we have access to
     calendars = service.calendarList().list().execute()
     for cal in calendars.get('items', []):
-        print(f"📆 Found calendar: {cal['summary']} (ID: {cal['id']})")
-
+        logging.info(f"📆 Found calendar: {cal['summary']} (ID: {cal['id']})")
     # ⛔ Don’t continue yet — let’s review in the logs first
     return "Logged available calendars! Check Railway logs and tell ChatGPT which one is yours ✨"
