@@ -49,7 +49,7 @@ async def load_cogs():
 
     if commands_dir.exists():
         for command_file in commands_dir.glob("*.py"):
-            if command_file.stem != "__init__":  # Avoid loading __init__.py
+            if command_file.stem not in ["__init__", "daily"]:  # Avoid loading __init__.py
                 module_name = f"commands.{command_file.stem}"
                 try:
                     await bot.load_extension(module_name)
