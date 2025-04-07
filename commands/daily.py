@@ -3,11 +3,11 @@ import json
 import datetime
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from dateutil import parser  # Don't forget to include `python-dateutil` in requirements.txt
-
+from dateutil import parser  # Make sure 'python-dateutil' is in your requirements.txt
+import pytz
 
 def get_upcoming_events():
-    # 🌐 Load service account credentials from environment variable
+    # 🌐 Load service account credentials from Railway environment variable
     json_str = os.getenv("GOOGLE_CREDENTIALS_JSON")
     if not json_str:
         return "No credentials found 😢"
@@ -18,19 +18,17 @@ def get_upcoming_events():
         scopes=['https://www.googleapis.com/auth/calendar.readonly']
     )
 
-    # 📆 Connect to Google Calendar API
-    service = build('calendar', 'v3', credentials=creds)
-
-    # 🕓 Define the time window: now through the end of tomorrow
-    import pytz
+    # 🧭 Set timezone to America/New_York
     local_tz = pytz.timezone("America/New_York")
     now = datetime.datetime.now(local_tz)
+    print(f"📅 Basil thinks it’s currently: {now.isoformat()}")
     end = now + datetime.timedelta(days=2)
-    print(f"📅 Basil thinks it's currently: {now.isoformat()}")
     now_iso = now.isoformat()
     end_iso = end.isoformat()
 
-    # 📥 Fetch events from Google Calendar
+    # 🗓️ Connect to Google Calendar
+    service = build('calendar', 'v3', credentials=creds)
+
     events_result = service.events().list(
         calendarId='primary',
         timeMin=now_iso,
@@ -41,7 +39,7 @@ def get_upcoming_events():
 
     events = events_result.get('items', [])
 
-    # 🪵 Debug logging for Railway logs
+    # 📋 Debug output
     print(f"✅ Basil sees {len(events)} events coming up:")
     for e in events:
         start_info = e.get('start', {})
@@ -57,7 +55,7 @@ def get_upcoming_events():
     for event in events:
         start_str = event.get('start', {}).get('dateTime') or event.get('start', {}).get('date')
         try:
-            start = parser.parse(start_str)
+            start = parser.parse(start_str).astimezone(local_tz)
         except Exception as e:
             print(f"⚠️ Could not parse date for event: {event.get('summary', 'No title')} — {e}")
             continue
@@ -68,14 +66,17 @@ def get_upcoming_events():
         elif start.date() == (now + datetime.timedelta(days=1)).date():
             output["tomorrow"].append((start, summary))
 
-    # 🎨 Format the output nicely
+    # ✨ Format event list output
     def format_event_list(label, event_list):
         if not event_list:
             return ""
         lines = [f"**{label.capitalize()}:**"]
         for start, summary in event_list:
-            time_str = start.strftime("%-I:%M %p").lstrip("0") if start.time() != datetime.time(0, 0) else ""
-            lines.append(f"• {summary} at {time_str}".strip())
+            if start.time() != datetime.time(0, 0):
+                time_str = start.strftime("%-I:%M %p").lstrip("0")
+                lines.append(f"• {summary} at {time_str}")
+            else:
+                lines.append(f"• {summary}")
         return "\n".join(lines)
 
     today_text = format_event_list("today", output["today"])
