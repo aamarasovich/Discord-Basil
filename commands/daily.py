@@ -3,10 +3,11 @@ import json
 import datetime
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from dateutil import parser  # make sure this is in requirements.txt
+from dateutil import parser  # Make sure 'python-dateutil' is in requirements.txt
 import pytz
 
 def get_upcoming_events():
+    # 🔐 Load credentials from Railway environment variable
     json_str = os.getenv("GOOGLE_CREDENTIALS_JSON")
     if not json_str:
         return "No credentials found 😢"
@@ -17,21 +18,18 @@ def get_upcoming_events():
         scopes=['https://www.googleapis.com/auth/calendar.readonly']
     )
 
-    # ✨ connect to Google Calendar uwu
+    # 📆 Connect to the Calendar API
     service = build('calendar', 'v3', credentials=creds)
 
-    # 🧠 figure out what time Basil thinks it is
+    # ⏰ Use America/New_York time zone so Basil thinks like you do
     local_tz = pytz.timezone("America/New_York")
     now = datetime.datetime.now(local_tz)
-    print(f"📅 Basil thinks it's currently: {now.isoformat()}")
-    end = now + datetime.timedelta(days=2)
-    now_iso = now.isoformat()
-    end_iso = end.isoformat()
+    print(f"📅 Basil thinks it’s currently: {now.isoformat()}")
 
-    # 🕵️‍♀️ let's see ALL calendars we can read
+    # 🕵️‍♀️ Check which calendars we have access to
     calendars = service.calendarList().list().execute()
     for cal in calendars.get('items', []):
         print(f"📆 Found calendar: {cal['summary']} (ID: {cal['id']})")
 
-    # ⛔ STOP HERE after pushing — check Railway logs before continuing
+    # ⛔ Don’t continue yet — let’s review in the logs first
     return "Logged available calendars! Check Railway logs and tell ChatGPT which one is yours ✨"
