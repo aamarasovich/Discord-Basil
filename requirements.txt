@@ -10,3 +10,4 @@ google-auth-httplib2
 PyNaCl
 pytz
 Pillow
+python-dateutil

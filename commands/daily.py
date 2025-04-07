@@ -6,6 +6,7 @@ import pickle
 
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from dateutil import parser  # you'll need to add `python-dateutil` to requirements.txt
 
 SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
 
@@ -17,7 +18,7 @@ def get_upcoming_events():
 
     if not creds or not creds.valid:
         flow = InstalledAppFlow.from_client_secrets_file(
-            'client_secret_437884529088-2psq5mitl4dnrfu1498iuuljhh5scsi6.apps.googleusercontent.com.json', SCOPES  # use your actual filename!
+            'client_secret_*.json', SCOPES
         )
         creds = flow.run_local_server(port=0)
         with open('token.pickle', 'wb') as token:
@@ -25,11 +26,15 @@ def get_upcoming_events():
 
     service = build('calendar', 'v3', credentials=creds)
 
-    now = datetime.datetime.utcnow().isoformat() + 'Z'
+    now = datetime.datetime.now(datetime.timezone.utc)
+    end = now + datetime.timedelta(days=2)
+    now_iso = now.isoformat()
+    end_iso = end.isoformat()
+
     events_result = service.events().list(
         calendarId='primary',
-        timeMin=now,
-        maxResults=10,
+        timeMin=now_iso,
+        timeMax=end_iso,
         singleEvents=True,
         orderBy='startTime'
     ).execute()
@@ -37,12 +42,30 @@ def get_upcoming_events():
     events = events_result.get('items', [])
 
     if not events:
-        return "No upcoming events found."
+        return "You have no events today or tomorrow ✨"
 
-    output = []
+    output = {"today": [], "tomorrow": []}
+
     for event in events:
-        start = event['start'].get('dateTime', event['start'].get('date'))
+        start_str = event['start'].get('dateTime', event['start'].get('date'))
+        start = parser.parse(start_str)
         summary = event.get('summary', 'No title')
-        output.append(f"{start} - {summary}")
 
-    return "\n".join(output)
+        if start.date() == now.date():
+            output["today"].append((start, summary))
+        elif start.date() == (now + datetime.timedelta(days=1)).date():
+            output["tomorrow"].append((start, summary))
+
+    def format_event_list(label, event_list):
+        if not event_list:
+            return ""
+        lines = [f"**{label.capitalize()}:**"]
+        for start, summary in event_list:
+            time_str = start.strftime("%-I:%M %p") if start.time() != datetime.time(0, 0) else ""
+            lines.append(f"• {summary} at {time_str}".strip())
+        return "\n".join(lines)
+
+    today_text = format_event_list("today", output["today"])
+    tomorrow_text = format_event_list("tomorrow", output["tomorrow"])
+
+    return "\n\n".join(filter(None, [today_text, tomorrow_text]))
