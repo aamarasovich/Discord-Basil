@@ -1,9 +1,10 @@
-import logging
+import os
 import json
 import datetime
+import logging
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from dateutil import parser  # Make sure 'python-dateutil' is in requirements.txt
+from dateutil import parser
 import pytz
 
 def get_upcoming_events():
