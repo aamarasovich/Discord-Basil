@@ -56,7 +56,7 @@ def get_today_events(service):
         events_result = service.events().list(
             scopes=['https://www.googleapis.com/auth/calendar.readonly', 
             'https://www.googleapis.com/auth/tasks.readonly'],
-            calendarId='primary',
+            calendarId='Alex Marasovich',
             timeMin=start_of_day.isoformat(),
             timeMax=end_of_day.isoformat(),
             singleEvents=True,
