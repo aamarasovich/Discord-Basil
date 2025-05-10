@@ -4,6 +4,7 @@ import logging
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from datetime import datetime, timezone
+import pytz  # Import pytz for timezone handling
 from discord.ext import commands
 
 # Set up logging
@@ -37,18 +38,27 @@ def get_google_services():
 
 def get_today_events(service):
     """
-    Fetches today's events from Google Calendar.
+    Fetches today's events from Google Calendar in the local timezone.
     """
     try:
-        now = datetime.now(timezone.utc).isoformat()
-        end_of_day = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59).isoformat()
+        # Define the local timezone (e.g., Eastern Time)
+        eastern = pytz.timezone('America/New_York')
+
+        # Get the start and end of the day in the local timezone
+        now = datetime.now(eastern)
+        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_day = now.replace(hour=23, minute=59, second=59, microsecond=999999)
 
         # Log the time range for debugging
-        logger.info(f"Fetching events from {now} to {end_of_day}")
+        logger.info(f"Fetching events from {start_of_day} to {end_of_day} in Eastern Time")
 
+        # Query Google Calendar API
         events_result = service.events().list(
-            calendarId='primary', timeMin=now, timeMax=end_of_day,
-            singleEvents=True, orderBy='startTime'
+            calendarId='primary',
+            timeMin=start_of_day.isoformat(),
+            timeMax=end_of_day.isoformat(),
+            singleEvents=True,
+            orderBy='startTime'
         ).execute()
         return events_result.get('items', [])
     except Exception as e:
@@ -57,20 +67,28 @@ def get_today_events(service):
 
 def get_today_tasks(service):
     """
-    Fetches today's tasks from Google Tasks.
+    Fetches today's tasks from Google Tasks in the local timezone.
     """
     try:
-        today = datetime.now(timezone.utc).date()
-        logger.info(f"Fetching tasks for {today}")
+        # Define the local timezone (e.g., Eastern Time)
+        eastern = pytz.timezone('America/New_York')
 
+        # Get today's date in the local timezone
+        today = datetime.now(eastern).date()
+        logger.info(f"Fetching tasks for {today} in Eastern Time")
+
+        # Query Google Tasks API
         tasklists = service.tasklists().list().execute()
         tasks_today = []
         for tasklist in tasklists.get('items', []):
             tasks = service.tasks().list(tasklist=tasklist['id']).execute()
             for task in tasks.get('items', []):
                 due = task.get('due')
-                if due and datetime.fromisoformat(due[:-1]).date() == today:
-                    tasks_today.append(task)
+                if due:
+                    # Convert the due date to the local timezone
+                    due_date = datetime.fromisoformat(due[:-1]).astimezone(eastern).date()
+                    if due_date == today:
+                        tasks_today.append(task)
         return tasks_today
     except Exception as e:
         logger.error(f"Error fetching today's tasks: {e}")
