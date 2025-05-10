@@ -14,6 +14,7 @@ logging.basicConfig(level=logging.INFO)
 def get_google_services():
     """
     Initializes Google Calendar and Tasks services using credentials from the environment.
+    Supports both service account credentials and OAuth client credentials.
     """
     try:
         # Load credentials from the environment variable
@@ -23,15 +24,43 @@ def get_google_services():
 
         # Parse the JSON string into a dictionary
         credentials_dict = json.loads(credentials_json)
-
-        # Create credentials object
-        credentials = Credentials.from_service_account_info(credentials_dict)
+        
+        # Log what type of credentials we're dealing with (without sensitive info)
+        if 'type' in credentials_dict:
+            logger.info(f"Credential type detected: {credentials_dict.get('type')}")
+        
+        # Check if this is a service account or OAuth client credentials
+        if 'type' in credentials_dict and credentials_dict['type'] == 'service_account':
+            # Validate required fields for service account
+            required_fields = ['client_email', 'private_key', 'token_uri']
+            missing_fields = [field for field in required_fields if field not in credentials_dict]
+            
+            if missing_fields:
+                missing_fields_str = ', '.join(missing_fields)
+                raise ValueError(f"Service account credentials missing required fields: {missing_fields_str}")
+            
+            # Create service account credentials
+            logger.info("Using service account for authentication")
+            credentials = Credentials.from_service_account_info(credentials_dict)
+        elif 'installed' in credentials_dict or 'web' in credentials_dict:
+            # This is OAuth client credentials, not supported in this function
+            raise ValueError("OAuth client credentials detected. Please use the OAuth flow through web_server.py instead.")
+        else:
+            # Unknown credential format
+            raise ValueError("Unrecognized credential format. Please provide valid service account credentials.")
 
         # Initialize Google Calendar and Tasks services with cache_discovery=False
         calendar_service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
         tasks_service = build("tasks", "v1", credentials=credentials, cache_discovery=False)
 
+        # Test the connection by making a simple API call
+        calendar_service.calendarList().list(maxResults=1).execute()
+        logger.info("Successfully connected to Google Calendar API")
+        
         return calendar_service, tasks_service
+    except ValueError as ve:
+        logger.error(f"Credentials error: {ve}")
+        raise
     except Exception as e:
         logger.error(f"Error initializing Google services: {e}")
         raise
