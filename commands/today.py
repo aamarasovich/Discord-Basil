@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from google_services import get_google_services, get_today_events, get_today_tasks
+from google_services import get_google_services, get_today_events, get_today_tasks, list_calendars
 
 class Today(commands.Cog):
     def __init__(self, bot):
@@ -13,11 +13,14 @@ class Today(commands.Cog):
         """
         try:
             # Initialize Google services
-            calendar_service, tasks_service = get_google_services()  # Removed 'await'
+            calendar_service, tasks_service = get_google_services()
+
+            # Debug: List all available calendars
+            list_calendars(calendar_service)
 
             # Fetch today's events and tasks
-            events = get_today_events(calendar_service)  # Removed 'await'
-            tasks = get_today_tasks(tasks_service)  # Removed 'await'
+            events = get_today_events(calendar_service)
+            tasks = get_today_tasks(tasks_service)
 
             # Format the response
             response = "**📅 Today's Events:**\n"

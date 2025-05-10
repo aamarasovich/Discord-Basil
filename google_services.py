@@ -43,6 +43,9 @@ def get_today_events(service):
         now = datetime.now(timezone.utc).isoformat()
         end_of_day = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59).isoformat()
 
+        # Log the time range for debugging
+        logger.info(f"Fetching events from {now} to {end_of_day}")
+
         events_result = service.events().list(
             calendarId='primary', timeMin=now, timeMax=end_of_day,
             singleEvents=True, orderBy='startTime'
@@ -57,18 +60,32 @@ def get_today_tasks(service):
     Fetches today's tasks from Google Tasks.
     """
     try:
+        today = datetime.now(timezone.utc).date()
+        logger.info(f"Fetching tasks for {today}")
+
         tasklists = service.tasklists().list().execute()
         tasks_today = []
         for tasklist in tasklists.get('items', []):
             tasks = service.tasks().list(tasklist=tasklist['id']).execute()
             for task in tasks.get('items', []):
                 due = task.get('due')
-                if due and datetime.fromisoformat(due[:-1]).date() == datetime.now(timezone.utc).date():
+                if due and datetime.fromisoformat(due[:-1]).date() == today:
                     tasks_today.append(task)
         return tasks_today
     except Exception as e:
         logger.error(f"Error fetching today's tasks: {e}")
         return []
+
+def list_calendars(service):
+    """
+    Lists all calendars accessible by the authenticated account.
+    """
+    try:
+        calendars = service.calendarList().list().execute()
+        for calendar in calendars.get('items', []):
+            logger.info(f"Calendar: {calendar['summary']} (ID: {calendar['id']})")
+    except Exception as e:
+        logger.error(f"Error listing calendars: {e}")
 
 class Today(commands.Cog):
     def __init__(self, bot):
