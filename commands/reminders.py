@@ -16,7 +16,9 @@ class Reminders(commands.Cog):
         try:
             # Check if input is a specific date/time
             try:
-                reminder_time = datetime.strptime(time_input, "%Y-%m-%d %H:%M")
+                # Split the input to extract the date/time part
+                time_part = time_input.split()[0]  # Take only the first part
+                reminder_time = datetime.strptime(time_part, "%Y-%m-%d %H:%M")
                 now = datetime.now()
                 if reminder_time <= now:
                     await ctx.send("The specified time is in the past. Please provide a future time.")
