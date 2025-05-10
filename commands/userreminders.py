@@ -3,19 +3,32 @@ from datetime import datetime, timedelta
 import discord
 from discord.ext import commands
 from discord.ext.commands import BucketType
+import logging
 
-class Reminders(commands.Cog):
+logger = logging.getLogger("discord")
+
+class UserReminders(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     @commands.command(name="remindyou")
     @commands.cooldown(1, 10, BucketType.user)  # 1 use per 10 seconds per user
-    async def remindyou(self, ctx, member: discord.Member, *, time_input: str):
+    async def remindyou(self, ctx, member: discord.Member = None, *, time_input: str = None):
         """
         Sets a reminder for another user. Accepts both time increments (e.g., '1h30m')
         and specific date/time formats (e.g., '2025-05-10 14:30').
         """
+        if not member:
+            await ctx.send("You need to mention a user to remind! Example: `!remindyou @JohnDoe 1h30m Check the oven`")
+            return
+        if not time_input:
+            await ctx.send("You need to specify a time and message! Example: `!remindyou @JohnDoe 1h30m Check the oven`")
+            return
+
         try:
+            time_input = time_input.strip()
+            logger.info(f"Received remindyou command from {ctx.author} for {member} with input: {time_input}")
+
             # Extract the date/time or time increment from the input
             match = re.match(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2})", time_input)
             if match:
@@ -48,12 +61,16 @@ class Reminders(commands.Cog):
             reminder_message = time_input  # Include the full input as the reminder message
             await ctx.send(f"Reminder set! I'll remind {member.mention} in {time_input}.")
             await discord.utils.sleep_until(datetime.now() + timedelta(seconds=delay))
-            await member.send(f"⏰ Reminder from {ctx.author.mention}: {reminder_message}")
+            try:
+                await member.send(f"⏰ Reminder from {ctx.author.mention}: {reminder_message}")
+            except discord.Forbidden:
+                await ctx.send(f"I couldn't send a DM to {member.mention}. They might have DMs disabled.")
 
         except commands.CommandOnCooldown as e:
             await ctx.send(f"You're using this command too frequently. Try again in {round(e.retry_after, 2)} seconds.")
         except Exception as e:
+            logger.error(f"An error occurred in remindyou: {e}")
             await ctx.send(f"An error occurred: {e}")
 
 async def setup(bot):
-    await bot.add_cog(Reminders(bot))
+    await bot.add_cog(UserReminders(bot))
