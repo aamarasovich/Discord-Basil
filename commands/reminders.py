@@ -32,8 +32,12 @@ class Reminders(commands.Cog):
 
                 time_data = match.groupdict()
                 hours = int(time_data['hours']) if time_data['hours'] else 0
-                minutes = int(time_data['minutes']) if time_data['minutes']) else 0
+                minutes = int(time_data['minutes']) if time_data['minutes'] else 0
                 delay = timedelta(hours=hours, minutes=minutes).total_seconds()
+
+            if delay <= 0:
+                await ctx.send("The specified time is invalid. Please provide a future time.")
+                return
 
             # Schedule the reminder
             await ctx.send(f"Reminder set! I'll remind you in {time_input}.")
