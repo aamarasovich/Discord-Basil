@@ -38,15 +38,9 @@ def get_google_services():
 
 def get_today_events(service):
     """
-    Fetches today's events from Google Calendar in the local timezone.
+    Fetches today's events from all accessible Google Calendars in the local timezone.
     """
     try:
-        # Debug: List all available calendars
-        logger.info("Listing all available calendars for debugging:")
-        calendars = service.calendarList().list().execute()
-        for calendar in calendars.get('items', []):
-            logger.info(f"Available Calendar: {calendar.get('summary', 'Unnamed')} (ID: {calendar.get('id', 'No ID')})")
-
         # Define the local timezone (e.g., Eastern Time)
         eastern = pytz.timezone('America/New_York')
 
@@ -58,25 +52,65 @@ def get_today_events(service):
         # Log the time range for debugging
         logger.info(f"Fetching events from {start_of_day} to {end_of_day} in Eastern Time")
         
-        # Debug: Log which calendar ID we're using
-        logger.info(f"Using calendar ID: 'Alex Marasovich'")
-
-        # Query Google Calendar API
-        events_result = service.events().list(
-            calendarId='Alex Marasovich',
-            timeMin=start_of_day.isoformat(),
-            timeMax=end_of_day.isoformat(),
-            singleEvents=True,
-            orderBy='startTime'
-        ).execute()
-        return events_result.get('items', [])
+        # Get all available calendars
+        logger.info("Fetching events from all available calendars")
+        all_events = []
+        calendars = service.calendarList().list().execute()
+        calendar_count = len(calendars.get('items', []))
+        logger.info(f"Found {calendar_count} calendars to check")
+        
+        # Process each calendar with rate limiting
+        for i, calendar in enumerate(calendars.get('items', [])):
+            calendar_id = calendar.get('id')
+            calendar_name = calendar.get('summary', 'Unnamed')
+            
+            # Log which calendar we're checking
+            logger.info(f"Checking calendar {i+1}/{calendar_count}: {calendar_name} (ID: {calendar_id})")
+            
+            try:
+                # Rate limiting - sleep for a short time between requests
+                # More time between requests as we process more calendars
+                if i > 0:
+                    import time
+                    time.sleep(0.2)  # 200ms delay between calendar queries
+                
+                # Query this calendar
+                events_result = service.events().list(
+                    calendarId=calendar_id,
+                    timeMin=start_of_day.isoformat(),
+                    timeMax=end_of_day.isoformat(),
+                    singleEvents=True,
+                    orderBy='startTime'
+                ).execute()
+                
+                calendar_events = events_result.get('items', [])
+                
+                # Add calendar name to each event for reference
+                for event in calendar_events:
+                    event['calendarName'] = calendar_name
+                
+                # Add events from this calendar to our combined list
+                all_events.extend(calendar_events)
+                logger.info(f"Found {len(calendar_events)} events in calendar '{calendar_name}'")
+                
+            except Exception as e:
+                logger.error(f"Error fetching events from calendar '{calendar_name}': {e}")
+                # Continue to next calendar even if this one fails
+                continue
+        
+        # Sort all events by start time
+        all_events.sort(key=lambda x: x['start'].get('dateTime', x['start'].get('date', '')) if x.get('start') else '')
+        
+        logger.info(f"Total events found across all calendars: {len(all_events)}")
+        return all_events
+        
     except Exception as e:
         logger.error(f"Error fetching today's events: {e}")
         return []
 
 def get_today_tasks(service):
     """
-    Fetches today's tasks from Google Tasks in the local timezone.
+    Fetches today's tasks from all Google Task lists in the local timezone.
     """
     try:
         # Define the local timezone (e.g., Eastern Time)
@@ -86,19 +120,52 @@ def get_today_tasks(service):
         today = datetime.now(eastern).date()
         logger.info(f"Fetching tasks for {today} in Eastern Time")
 
-        # Query Google Tasks API
+        # Query Google Tasks API for all task lists
+        logger.info("Fetching tasks from all available task lists")
         tasklists = service.tasklists().list().execute()
-        tasks_today = []
-        for tasklist in tasklists.get('items', []):
-            tasks = service.tasks().list(tasklist=tasklist['id']).execute()
-            for task in tasks.get('items', []):
-                due = task.get('due')
-                if due:
-                    # Convert the due date to the local timezone
-                    due_date = datetime.fromisoformat(due[:-1]).astimezone(eastern).date()
-                    if due_date == today:
-                        tasks_today.append(task)
-        return tasks_today
+        all_tasks_today = []
+        tasklist_count = len(tasklists.get('items', []))
+        logger.info(f"Found {tasklist_count} task lists to check")
+        
+        # Process each task list with rate limiting
+        for i, tasklist in enumerate(tasklists.get('items', [])):
+            tasklist_id = tasklist.get('id')
+            tasklist_title = tasklist.get('title', 'Unnamed')
+            
+            # Log which task list we're checking
+            logger.info(f"Checking task list {i+1}/{tasklist_count}: {tasklist_title} (ID: {tasklist_id})")
+            
+            try:
+                # Rate limiting - sleep for a short time between requests
+                if i > 0:
+                    import time
+                    time.sleep(0.2)  # 200ms delay between task list queries
+                
+                # Query this task list
+                tasks = service.tasks().list(tasklist=tasklist_id).execute()
+                
+                # Find tasks due today
+                tasks_found = 0
+                for task in tasks.get('items', []):
+                    due = task.get('due')
+                    if due:
+                        # Convert the due date to the local timezone
+                        due_date = datetime.fromisoformat(due[:-1]).astimezone(eastern).date()
+                        if due_date == today:
+                            # Add task list name for reference
+                            task['taskListName'] = tasklist_title
+                            all_tasks_today.append(task)
+                            tasks_found += 1
+                
+                logger.info(f"Found {tasks_found} tasks due today in task list '{tasklist_title}'")
+                
+            except Exception as e:
+                logger.error(f"Error fetching tasks from task list '{tasklist_title}': {e}")
+                # Continue to next task list even if this one fails
+                continue
+        
+        logger.info(f"Total tasks found due today across all task lists: {len(all_tasks_today)}")
+        return all_tasks_today
     except Exception as e:
         logger.error(f"Error fetching today's tasks: {e}")
         return []
