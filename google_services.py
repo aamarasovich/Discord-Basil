@@ -26,9 +26,9 @@ def get_google_services():
         # Create credentials object
         credentials = Credentials.from_service_account_info(credentials_dict)
 
-        # Initialize Google Calendar and Tasks services
-        calendar_service = build("calendar", "v3", credentials=credentials)
-        tasks_service = build("tasks", "v1", credentials=credentials)
+        # Initialize Google Calendar and Tasks services with cache_discovery=False
+        calendar_service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
+        tasks_service = build("tasks", "v1", credentials=credentials, cache_discovery=False)
 
         return calendar_service, tasks_service
     except Exception as e:

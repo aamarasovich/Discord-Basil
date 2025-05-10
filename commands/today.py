@@ -13,11 +13,11 @@ class Today(commands.Cog):
         """
         try:
             # Initialize Google services
-            calendar_service, tasks_service = await get_google_services()
+            calendar_service, tasks_service = get_google_services()  # Removed 'await'
 
             # Fetch today's events and tasks
-            events = await get_today_events(calendar_service)
-            tasks = await get_today_tasks(tasks_service)
+            events = get_today_events(calendar_service)  # Removed 'await'
+            tasks = get_today_tasks(tasks_service)  # Removed 'await'
 
             # Format the response
             response = "**📅 Today's Events:**\n"
