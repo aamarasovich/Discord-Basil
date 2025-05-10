@@ -41,6 +41,12 @@ def get_today_events(service):
     Fetches today's events from Google Calendar in the local timezone.
     """
     try:
+        # Debug: List all available calendars
+        logger.info("Listing all available calendars for debugging:")
+        calendars = service.calendarList().list().execute()
+        for calendar in calendars.get('items', []):
+            logger.info(f"Available Calendar: {calendar.get('summary', 'Unnamed')} (ID: {calendar.get('id', 'No ID')})")
+
         # Define the local timezone (e.g., Eastern Time)
         eastern = pytz.timezone('America/New_York')
 
@@ -51,6 +57,9 @@ def get_today_events(service):
 
         # Log the time range for debugging
         logger.info(f"Fetching events from {start_of_day} to {end_of_day} in Eastern Time")
+        
+        # Debug: Log which calendar ID we're using
+        logger.info(f"Using calendar ID: 'Alex Marasovich'")
 
         # Query Google Calendar API
         events_result = service.events().list(
