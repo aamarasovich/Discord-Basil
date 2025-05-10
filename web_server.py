@@ -2,7 +2,7 @@ import os
 import json
 import logging
 from fastapi import FastAPI, Request
-from google.oauth2.flow import Flow
+from google_auth_oauthlib.flow import Flow  # Corrected import
 from googleapiclient.discovery import build
 import uvicorn
 from google.oauth2.credentials import Credentials
