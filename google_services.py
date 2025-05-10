@@ -1,30 +1,103 @@
-from google.oauth2.credentials import Credentials
+import os
+import json
+import logging
+from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-import datetime
+from datetime import datetime, timezone
+from discord.ext import commands
+
+# Set up logging
+logger = logging.getLogger("google_services")
+logging.basicConfig(level=logging.INFO)
 
 def get_google_services():
-    creds = Credentials.from_authorized_user_file('token.json', ['https://www.googleapis.com/auth/calendar.readonly', 'https://www.googleapis.com/auth/tasks.readonly'])
-    calendar_service = build('calendar', 'v3', credentials=creds)
-    tasks_service = build('tasks', 'v1', credentials=creds)
-    return calendar_service, tasks_service
+    """
+    Initializes Google Calendar and Tasks services using credentials from the environment.
+    """
+    try:
+        # Load credentials from the environment variable
+        credentials_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
+        if not credentials_json:
+            raise ValueError("GOOGLE_CREDENTIALS_JSON environment variable is not set.")
+
+        # Parse the JSON string into a dictionary
+        credentials_dict = json.loads(credentials_json)
+
+        # Create credentials object
+        credentials = Credentials.from_service_account_info(credentials_dict)
+
+        # Initialize Google Calendar and Tasks services
+        calendar_service = build("calendar", "v3", credentials=credentials)
+        tasks_service = build("tasks", "v1", credentials=credentials)
+
+        return calendar_service, tasks_service
+    except Exception as e:
+        logger.error(f"Error initializing Google services: {e}")
+        raise
 
 def get_today_events(service):
-    now = datetime.datetime.utcnow().isoformat() + 'Z'
-    end_of_day = (datetime.datetime.utcnow().replace(hour=23, minute=59, second=59)).isoformat() + 'Z'
+    """
+    Fetches today's events from Google Calendar.
+    """
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        end_of_day = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59).isoformat()
 
-    events_result = service.events().list(
-        calendarId='primary', timeMin=now, timeMax=end_of_day,
-        singleEvents=True, orderBy='startTime'
-    ).execute()
-    return events_result.get('items', [])
+        events_result = service.events().list(
+            calendarId='primary', timeMin=now, timeMax=end_of_day,
+            singleEvents=True, orderBy='startTime'
+        ).execute()
+        return events_result.get('items', [])
+    except Exception as e:
+        logger.error(f"Error fetching today's events: {e}")
+        return []
 
 def get_today_tasks(service):
-    tasklists = service.tasklists().list().execute()
-    tasks_today = []
-    for tasklist in tasklists.get('items', []):
-        tasks = service.tasks().list(tasklist=tasklist['id']).execute()
-        for task in tasks.get('items', []):
-            due = task.get('due')
-            if due and datetime.datetime.fromisoformat(due[:-1]).date() == datetime.datetime.utcnow().date():
-                tasks_today.append(task)
-    return tasks_today
+    """
+    Fetches today's tasks from Google Tasks.
+    """
+    try:
+        tasklists = service.tasklists().list().execute()
+        tasks_today = []
+        for tasklist in tasklists.get('items', []):
+            tasks = service.tasks().list(tasklist=tasklist['id']).execute()
+            for task in tasks.get('items', []):
+                due = task.get('due')
+                if due and datetime.fromisoformat(due[:-1]).date() == datetime.now(timezone.utc).date():
+                    tasks_today.append(task)
+        return tasks_today
+    except Exception as e:
+        logger.error(f"Error fetching today's tasks: {e}")
+        return []
+
+class Today(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.command(name="today")
+    async def today(self, ctx):
+        try:
+            # Debug: Check if GOOGLE_CREDENTIALS_JSON is accessible
+            if not os.getenv("GOOGLE_CREDENTIALS_JSON"):
+                await ctx.send("GOOGLE_CREDENTIALS_JSON is not set in the environment.")
+                return
+
+            # Initialize Google services
+            calendar_service, tasks_service = get_google_services()
+
+            # Fetch today's events and tasks
+            events = get_today_events(calendar_service)
+            tasks = get_today_tasks(tasks_service)
+
+            # Format and send the response
+            response = "**📅 Today's Events:**\n"
+            response += "No events today.\n" if not events else "\n".join(
+                f"- {event['summary']} at {event['start'].get('dateTime', event['start'].get('date'))}" for event in events
+            )
+            response += "\n\n**📝 Today's Tasks:**\n"
+            response += "No tasks due today." if not tasks else "\n".join(f"- {task['title']}" for task in tasks)
+
+            await ctx.send(response)
+        except Exception as e:
+            await ctx.send("An error occurred while retrieving today's events and tasks.")
+            logger.error(f"Error in 'today' command: {e}")
