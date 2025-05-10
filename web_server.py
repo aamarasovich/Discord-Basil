@@ -14,27 +14,40 @@ logging.basicConfig(level=logging.INFO)
 
 app = FastAPI()
 
-# Get base URL from environment or default to localhost
-# Use PORT from environment or default to 8000
+# Get the port from environment or default to 8000
 PORT = int(os.getenv("PORT", 8000))
 
 # Get the base URL from environment
-# On Railway, we can construct it from RAILWAY_STATIC_URL or RAILWAY_PUBLIC_DOMAIN if available
+# Since RAILWAY_STATIC_URL might be empty, we need a better approach
 BASE_URL = os.getenv("BASE_URL")
-if not BASE_URL:
+if not BASE_URL or BASE_URL.strip() == "":
+    # Try Railway-specific environment variables
     railway_static_url = os.getenv("RAILWAY_STATIC_URL")
     railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
-    if railway_static_url:
+    railway_service_id = os.getenv("RAILWAY_SERVICE_ID")
+    
+    # Check if we have valid Railway variables (not None or empty string)
+    if railway_static_url and railway_static_url.strip() != "":
         BASE_URL = f"https://{railway_static_url}"
-    elif railway_domain:
+    elif railway_domain and railway_domain.strip() != "":
         BASE_URL = f"https://{railway_domain}"
+    elif railway_service_id and railway_service_id.strip() != "":
+        # Try to construct URL from service ID
+        BASE_URL = f"https://{railway_service_id}.up.railway.app"
     else:
+        # We're not on Railway or can't detect URL, use localhost
         BASE_URL = f"http://localhost:{PORT}"
 
-# Log the redirect URI on startup
+# Log detailed information about URL detection
+logger.info(f"🔗 Detected BASE_URL: {BASE_URL}")
 logger.info(f"🔗 OAuth Redirect URI: {BASE_URL}/oauth2callback")
 logger.info(f"🌐 Running web server on port: {PORT}")
-logger.info(f"🌐 Environment variables: PORT={os.getenv('PORT')}, RAILWAY_STATIC_URL={os.getenv('RAILWAY_STATIC_URL')}, RAILWAY_PUBLIC_DOMAIN={os.getenv('RAILWAY_PUBLIC_DOMAIN')}")
+logger.info(f"🌐 Environment variables:")
+logger.info(f"   - PORT={os.getenv('PORT')}")
+logger.info(f"   - BASE_URL={os.getenv('BASE_URL')}")
+logger.info(f"   - RAILWAY_STATIC_URL={os.getenv('RAILWAY_STATIC_URL')}")
+logger.info(f"   - RAILWAY_PUBLIC_DOMAIN={os.getenv('RAILWAY_PUBLIC_DOMAIN')}")
+logger.info(f"   - RAILWAY_SERVICE_ID={os.getenv('RAILWAY_SERVICE_ID')}")
 
 # Google OAuth configuration
 CLIENT_SECRETS_JSON = os.getenv("GOOGLE_CLIENT_SECRETS_JSON")
