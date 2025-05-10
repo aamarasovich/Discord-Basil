@@ -50,12 +50,12 @@ logger.info(f"   - RAILWAY_PUBLIC_DOMAIN={os.getenv('RAILWAY_PUBLIC_DOMAIN')}")
 logger.info(f"   - RAILWAY_SERVICE_ID={os.getenv('RAILWAY_SERVICE_ID')}")
 
 # Google OAuth configuration
-CLIENT_SECRETS_JSON = os.getenv("GOOGLE_CLIENT_SECRETS_JSON")
+CLIENT_SECRETS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
 if CLIENT_SECRETS_JSON:
     CLIENT_SECRETS = json.loads(CLIENT_SECRETS_JSON)
     logger.info("✅ Google OAuth client secrets loaded successfully")
 else:
-    logger.error("❌ GOOGLE_CLIENT_SECRETS_JSON environment variable not set")
+    logger.error("❌ GOOGLE_CREDENTIALS_JSON environment variable not set")
     CLIENT_SECRETS = None
 
 SCOPES = [
