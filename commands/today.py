@@ -26,6 +26,7 @@ class Today(commands.Cog):
 
             # Debug: List all available calendars
             list_calendars(calendar_service)
+            await ctx.send("Check the logs for available calendars.")
 
             # Fetch today's events and tasks
             events = get_today_events(calendar_service)
