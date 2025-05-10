@@ -7,6 +7,7 @@ from googleapiclient.discovery import build
 import uvicorn
 from google.oauth2.credentials import Credentials
 from starlette.responses import RedirectResponse
+from google_services import save_user_credentials
 
 # Set up logging
 logger = logging.getLogger("web_server")
@@ -128,15 +129,15 @@ async def oauth2callback(request: Request, state: str = None, code: str = None, 
         # Get credentials from flow
         credentials = flow.credentials
         
-        # Store credentials for this user (you'll need to implement a storage mechanism)
-        # For now, we'll just log that we received them
-        logger.info(f"Received OAuth credentials for user {user_id}")
+        # Save the credentials for this user
+        saved = save_user_credentials(user_id, credentials)
+        if saved:
+            logger.info(f"Successfully saved OAuth credentials for user {user_id}")
+        else:
+            logger.error(f"Failed to save OAuth credentials for user {user_id}")
         
         # Clean up flow
         del active_flows[user_id]
-        
-        # Save credentials to file or database (implement this based on your needs)
-        # save_credentials(user_id, credentials)
         
         return {"message": "Authorization successful! You can close this window and return to Discord."}
     except Exception as e:
