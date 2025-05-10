@@ -47,6 +47,10 @@ async def load_cogs():
     if commands_dir.exists():
         for command_file in commands_dir.glob("*.py"):
             if command_file.stem != "__init__":  # Avoid loading __init__.py
+                module_name = f"commands.{command_file.stem}"
+                try:
+                    await bot.load_extension(module_name)
+                    logger.info(f"✅ Loaded cog: {module_name}")
                 except Exception as e:
                     logger.error(f"❌ Failed to load {module_name}: {e}")
     else:
