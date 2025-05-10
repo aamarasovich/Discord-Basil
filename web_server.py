@@ -15,12 +15,26 @@ logging.basicConfig(level=logging.INFO)
 app = FastAPI()
 
 # Get base URL from environment or default to localhost
-BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
+# Use PORT from environment or default to 8000
 PORT = int(os.getenv("PORT", 8000))
+
+# Get the base URL from environment
+# On Railway, we can construct it from RAILWAY_STATIC_URL or RAILWAY_PUBLIC_DOMAIN if available
+BASE_URL = os.getenv("BASE_URL")
+if not BASE_URL:
+    railway_static_url = os.getenv("RAILWAY_STATIC_URL")
+    railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+    if railway_static_url:
+        BASE_URL = f"https://{railway_static_url}"
+    elif railway_domain:
+        BASE_URL = f"https://{railway_domain}"
+    else:
+        BASE_URL = f"http://localhost:{PORT}"
 
 # Log the redirect URI on startup
 logger.info(f"🔗 OAuth Redirect URI: {BASE_URL}/oauth2callback")
 logger.info(f"🌐 Running web server on port: {PORT}")
+logger.info(f"🌐 Environment variables: PORT={os.getenv('PORT')}, RAILWAY_STATIC_URL={os.getenv('RAILWAY_STATIC_URL')}, RAILWAY_PUBLIC_DOMAIN={os.getenv('RAILWAY_PUBLIC_DOMAIN')}")
 
 # Google OAuth configuration
 CLIENT_SECRETS_JSON = os.getenv("GOOGLE_CLIENT_SECRETS_JSON")
