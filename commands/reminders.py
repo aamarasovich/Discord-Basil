@@ -16,35 +16,40 @@ class Reminders(commands.Cog):
         try:
             # Check if input is a specific date/time
             try:
-                # Split the input to extract the date/time part
-                time_part = time_input.split()[0]  # Take only the first part
-                reminder_time = datetime.strptime(time_part, "%Y-%m-%d %H:%M")
-                now = datetime.now()
-                if reminder_time <= now:
-                    await ctx.send("The specified time is in the past. Please provide a future time.")
+                # Extract the date/time part from the input
+                match = re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}", time_input)
+                if match:
+                    time_part = match.group(0)  # Extract the matched date/time
+                    reminder_time = datetime.strptime(time_part, "%Y-%m-%d %H:%M")
+                    now = datetime.now()
+                    if reminder_time <= now:
+                        await ctx.send("The specified time is in the past. Please provide a future time.")
+                        return
+                    delay = (reminder_time - now).total_seconds()
+                else:
+                    # If not a date/time, parse as time increment
+                    time_pattern = re.compile(r'((?P<hours>\d+)h)?((?P<minutes>\d+)m)?')
+                    match = time_pattern.fullmatch(time_input)
+                    if not match:
+                        await ctx.send("Invalid time format. Use '1h30m' for increments or 'YYYY-MM-DD HH:MM' for specific times.")
+                        return
+
+                    time_data = match.groupdict()
+                    hours = int(time_data['hours']) if time_data['hours'] else 0
+                    minutes = int(time_data['minutes']) if time_data['minutes'] else 0
+                    delay = timedelta(hours=hours, minutes=minutes).total_seconds()
+
+                if delay <= 0:
+                    await ctx.send("The specified time is invalid. Please provide a future time.")
                     return
-                delay = (reminder_time - now).total_seconds()
-            except ValueError:
-                # If not a date/time, parse as time increment
-                time_pattern = re.compile(r'((?P<hours>\d+)h)?((?P<minutes>\d+)m)?')
-                match = time_pattern.fullmatch(time_input)
-                if not match:
-                    await ctx.send("Invalid time format. Use '1h30m' for increments or 'YYYY-MM-DD HH:MM' for specific times.")
-                    return
 
-                time_data = match.groupdict()
-                hours = int(time_data['hours']) if time_data['hours'] else 0
-                minutes = int(time_data['minutes']) if time_data['minutes'] else 0
-                delay = timedelta(hours=hours, minutes=minutes).total_seconds()
+                # Schedule the reminder
+                await ctx.send(f"Reminder set! I'll remind you in {time_input}.")
+                await discord.utils.sleep_until(datetime.now() + timedelta(seconds=delay))
+                await ctx.author.send(f"⏰ Reminder: {time_input}")
 
-            if delay <= 0:
-                await ctx.send("The specified time is invalid. Please provide a future time.")
-                return
-
-            # Schedule the reminder
-            await ctx.send(f"Reminder set! I'll remind you in {time_input}.")
-            await discord.utils.sleep_until(datetime.now() + timedelta(seconds=delay))
-            await ctx.author.send(f"⏰ Reminder: {time_input}")
+            except Exception as e:
+                await ctx.send(f"An error occurred while parsing the time: {e}")
 
         except Exception as e:
             await ctx.send(f"An error occurred: {e}")
