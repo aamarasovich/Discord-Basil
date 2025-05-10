@@ -73,8 +73,7 @@ def run_web_server():
 async def connect_google(ctx):
     """Connect your Discord account to Google services for personal calendar and tasks"""
     user_id = str(ctx.author.id)
-    base_url = os.getenv("BASE_URL", "http://localhost:8000")  # Get the base URL from env or use default
-    auth_url = f"{base_url}/authorize?user_id={user_id}"
+    auth_url = f"{BASE_URL}/authorize?user_id={user_id}"
     
     await ctx.author.send(f"Click this link to connect your Google account to Discord-Basil:\n{auth_url}")
     await ctx.send("I've sent you a DM with instructions to connect your Google account!")

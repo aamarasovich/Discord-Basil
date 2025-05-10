@@ -64,9 +64,12 @@ def get_google_services(user_id=None):
                 return calendar_service, tasks_service
             else:
                 logger.info(f"No saved credentials found for user {user_id}")
+                # If we're explicitly looking for user credentials but didn't find any,
+                # raise an error rather than falling back to service account
+                raise ValueError("User has not connected their Google account yet")
         
-        # Fall back to service account if no user credentials or they failed
-        logger.info("Falling back to service account credentials")
+        # Only use service account if not looking for user-specific credentials
+        logger.info("Using service account credentials")
         
         # Load credentials from the environment variable
         credentials_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
@@ -89,19 +92,19 @@ def get_google_services(user_id=None):
             # Create service account credentials
             logger.info("Using service account for authentication")
             credentials = Credentials.from_service_account_info(credentials_dict)
+            
+            # Initialize Google Calendar and Tasks services with cache_discovery=False
+            calendar_service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
+            tasks_service = build("tasks", "v1", credentials=credentials, cache_discovery=False)
+
+            # Test the connection by making a simple API call
+            calendar_service.calendarList().list(maxResults=1).execute()
+            logger.info("Successfully connected to Google Calendar API with service account")
+            
+            return calendar_service, tasks_service
         else:
-            # We don't want to use OAuth client credentials here directly - that should go through the web flow
-            raise ValueError("OAuth client credentials detected. Please use the OAuth flow through web_server.py instead.")
-
-        # Initialize Google Calendar and Tasks services with cache_discovery=False
-        calendar_service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
-        tasks_service = build("tasks", "v1", credentials=credentials, cache_discovery=False)
-
-        # Test the connection by making a simple API call
-        calendar_service.calendarList().list(maxResults=1).execute()
-        logger.info("Successfully connected to Google Calendar API with service account")
-        
-        return calendar_service, tasks_service
+            # We have OAuth client credentials, not service account credentials
+            raise ValueError("OAuth client credentials detected instead of service account credentials.")
     except ValueError as ve:
         logger.error(f"Credentials error: {ve}")
         raise
