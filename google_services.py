@@ -105,6 +105,17 @@ def list_calendars(service):
     except Exception as e:
         logger.error(f"Error listing calendars: {e}")
 
+def list_task_lists(service):
+    """
+    Lists all task lists accessible by the authenticated account.
+    """
+    try:
+        tasklists = service.tasklists().list().execute()
+        for tasklist in tasklists.get('items', []):
+            logger.info(f"Task List: {tasklist['title']} (ID: {tasklist['id']})")
+    except Exception as e:
+        logger.error(f"Error listing task lists: {e}")
+
 class Today(commands.Cog):
     def __init__(self, bot):
         self.bot = bot

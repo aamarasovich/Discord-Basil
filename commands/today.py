@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from google_services import get_google_services, get_today_events, get_today_tasks, list_calendars
+from google_services import get_google_services, get_today_events, get_today_tasks, list_calendars, list_task_lists
 import os
 import logging
 
@@ -27,6 +27,10 @@ class Today(commands.Cog):
             # Debug: List all available calendars
             list_calendars(calendar_service)
             await ctx.send("Check the logs for available calendars.")
+
+            # Debug: List all available task lists
+            list_task_lists(tasks_service)
+            await ctx.send("Check the logs for available task lists.")
 
             # Fetch today's events and tasks
             events = get_today_events(calendar_service)
