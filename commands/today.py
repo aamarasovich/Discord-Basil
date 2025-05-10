@@ -1,6 +1,10 @@
 import discord
 from discord.ext import commands
 from google_services import get_google_services, get_today_events, get_today_tasks, list_calendars
+import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Today(commands.Cog):
     def __init__(self, bot):
@@ -12,6 +16,11 @@ class Today(commands.Cog):
         Retrieves and displays today's Google Calendar events and Google Tasks.
         """
         try:
+            # Debug: Check if GOOGLE_CREDENTIALS_JSON is accessible
+            if not os.getenv("GOOGLE_CREDENTIALS_JSON"):
+                await ctx.send("GOOGLE_CREDENTIALS_JSON is not set in the environment.")
+                return
+
             # Initialize Google services
             calendar_service, tasks_service = get_google_services()
 
@@ -22,29 +31,18 @@ class Today(commands.Cog):
             events = get_today_events(calendar_service)
             tasks = get_today_tasks(tasks_service)
 
-            # Format the response
+            # Format and send the response
             response = "**📅 Today's Events:**\n"
-            if events:
-                for event in events:
-                    start = event['start'].get('dateTime', event['start'].get('date'))
-                    response += f"- {event['summary']} at {start}\n"
-            else:
-                response += "No events today.\n"
+            response += "No events today.\n" if not events else "\n".join(
+                f"- {event['summary']} at {event['start'].get('dateTime', event['start'].get('date'))}" for event in events
+            )
+            response += "\n\n**📝 Today's Tasks:**\n"
+            response += "No tasks due today." if not tasks else "\n".join(f"- {task['title']}" for task in tasks)
 
-            response += "\n**📝 Today's Tasks:**\n"
-            if tasks:
-                for task in tasks:
-                    response += f"- {task['title']}\n"
-            else:
-                response += "No tasks due today."
-
-            # Send the response
             await ctx.send(response)
-
         except Exception as e:
-            # Handle errors gracefully
             await ctx.send("An error occurred while retrieving today's events and tasks.")
-            print(f"Error in 'today' command: {e}")
+            logger.error(f"Error in 'today' command: {e}")
 
 # Setup function to add the Cog
 async def setup(bot):
