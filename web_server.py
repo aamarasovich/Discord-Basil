@@ -92,8 +92,10 @@ async def authorize(request: Request, user_id: str):
         logger.info(f"User ID: {user_id}")
         logger.info(f"Using redirect URI: {REDIRECT_URI}")
         
-        # Log client info (without sensitive parts)
+        # Log client info (without sensitive parts) for debugging
         if isinstance(CLIENT_SECRETS, dict):
+            logger.info(f"Client type: {next(iter(CLIENT_SECRETS.keys()), 'unknown')}")  # 'web' or 'installed'
+            
             if 'web' in CLIENT_SECRETS:
                 client_id = CLIENT_SECRETS['web'].get('client_id', 'Not found')
                 auth_uri = CLIENT_SECRETS['web'].get('auth_uri', 'Not found')
@@ -105,9 +107,17 @@ async def authorize(request: Request, user_id: str):
                 # Check if our redirect URI is in the configured list
                 if REDIRECT_URI not in redirect_uris:
                     logger.error(f"⚠️ CRITICAL: Redirect URI {REDIRECT_URI} is not in the configured redirect URIs list!")
-                    logger.error(f"⚠️ Add this EXACT URI to your Google Cloud Console. URI validation is strict!")
-            else:
-                logger.error("OAuth client configuration missing 'web' section")
+                    logger.error(f"⚠️ Please add this EXACT URI to your Google Cloud Console. URI validation is strict!")
+            
+            # Check for JavaScript origins which might also be required
+            js_origins = CLIENT_SECRETS.get('web', {}).get('javascript_origins', [])
+            if js_origins:
+                logger.info(f"JavaScript origins: {js_origins}")
+                # Get just the base URL (scheme + domain) to check against JavaScript origins
+                base_url_parts = REDIRECT_URI.split('/', 3)
+                base_url = f"{base_url_parts[0]}//{base_url_parts[2]}" if len(base_url_parts) >= 3 else ""
+                if base_url and base_url not in js_origins:
+                    logger.warning(f"⚠️ Base URL {base_url} is not in the JavaScript origins list!")
         
         flow = Flow.from_client_config(
             client_config=CLIENT_SECRETS,
@@ -115,7 +125,7 @@ async def authorize(request: Request, user_id: str):
             redirect_uri=REDIRECT_URI
         )
 
-        # Generate authorization URL with additional parameters for testing
+        # Generate authorization URL with additional parameters
         # Include the user_id in the state parameter to retrieve it in callback
         authorization_url, state = flow.authorization_url(
             access_type='offline',
@@ -129,6 +139,7 @@ async def authorize(request: Request, user_id: str):
 
         logger.info(f"Generated authorization URL: {authorization_url}")
         logger.info(f"State parameter with user_id: {state}")
+        logger.info(f"Scopes requested: {SCOPES}")
         logger.info(f"==== END DEBUG INFO ====")
         
         return RedirectResponse(url=authorization_url)
@@ -137,7 +148,7 @@ async def authorize(request: Request, user_id: str):
         return {"error": f"Failed to start authorization: {str(e)}"}
 
 @app.get("/oauth2callback")
-async def oauth2callback(request: Request, state: str = None, code: str = None, error: str = None):
+async def oauth2callback(request: Request, state: str = None, code: str = None, error: str = None, error_description: str = None, error_subtype: str = None):
     """
     Handle the OAuth 2.0 callback from Google.
     """
@@ -145,9 +156,29 @@ async def oauth2callback(request: Request, state: str = None, code: str = None, 
     query_params = dict(request.query_params)
     logger.info(f"OAuth callback received with params: {query_params}")
     
+    # Handle error response from Google
     if error:
-        logger.error(f"OAuth error: {error}")
-        return {"error": error}
+        error_msg = f"OAuth error: {error}"
+        if error_description:
+            error_msg += f" - {error_description}"
+        if error_subtype:
+            error_msg += f" (Subtype: {error_subtype})"
+            
+        logger.error(error_msg)
+        
+        # More detailed logging for common errors
+        if error == "invalid_request":
+            logger.error("This usually indicates a mismatch between the redirect URI in your code and Google Console.")
+            logger.error(f"Please ensure that '{REDIRECT_URI}' is EXACTLY registered in Google Cloud Console.")
+            logger.error("Also check that your OAuth consent screen is properly configured and you've added test users if still in testing mode.")
+        elif error == "access_denied":
+            logger.error("User denied access to your app or didn't complete the consent flow.")
+        
+        return {
+            "error": error,
+            "error_description": error_description,
+            "troubleshooting_help": "Please contact the administrator with this error information."
+        }
 
     # Get user_id from state parameter (this is where we stored it earlier)
     user_id = state
