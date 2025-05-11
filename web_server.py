@@ -18,30 +18,34 @@ app = FastAPI()
 # Get the port from environment or default to 8000
 PORT = int(os.getenv("PORT", 8000))
 
-# Get the base URL from environment
-# Since RAILWAY_STATIC_URL might be empty, we need a better approach
-BASE_URL = os.getenv("BASE_URL")
-if not BASE_URL or BASE_URL.strip() == "":
+# Get the base URL from environment - CRITICAL for OAuth redirect URI validation
+# Google strictly validates redirect URIs for security reasons
+BASE_URL = os.getenv("BASE_URL", "").strip()
+REDIRECT_URI = None
+
+if not BASE_URL:
     # Try Railway-specific environment variables
-    railway_static_url = os.getenv("RAILWAY_STATIC_URL")
-    railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
-    railway_service_id = os.getenv("RAILWAY_SERVICE_ID")
+    railway_static_url = os.getenv("RAILWAY_STATIC_URL", "").strip()
+    railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
+    railway_service_id = os.getenv("RAILWAY_SERVICE_ID", "").strip()
     
-    # Check if we have valid Railway variables (not None or empty string)
-    if railway_static_url and railway_static_url.strip() != "":
+    if railway_static_url:
         BASE_URL = f"https://{railway_static_url}"
-    elif railway_domain and railway_domain.strip() != "":
+    elif railway_domain:
         BASE_URL = f"https://{railway_domain}"
-    elif railway_service_id and railway_service_id.strip() != "":
-        # Try to construct URL from service ID
+    elif railway_service_id:
         BASE_URL = f"https://{railway_service_id}.up.railway.app"
     else:
         # We're not on Railway or can't detect URL, use localhost
         BASE_URL = f"http://localhost:{PORT}"
 
+# Configure the exact OAuth redirect URI - must match exactly what's in Google Console
+REDIRECT_URI = f"{BASE_URL}/oauth2callback"
+
 # Log detailed information about URL detection
 logger.info(f"🔗 Detected BASE_URL: {BASE_URL}")
-logger.info(f"🔗 OAuth Redirect URI: {BASE_URL}/oauth2callback")
+logger.info(f"🔗 OAuth Redirect URI (MUST match Google Console): {REDIRECT_URI}")
+logger.info(f"🚨 Double-check that this EXACT URI is listed in Google Cloud Console")
 logger.info(f"🌐 Running web server on port: {PORT}")
 logger.info(f"🌐 Environment variables:")
 logger.info(f"   - PORT={os.getenv('PORT')}")
@@ -83,12 +87,10 @@ async def authorize(request: Request, user_id: str):
 
     try:
         # Create a flow instance to manage the OAuth 2.0 Authorization Grant Flow
-        redirect_uri = f"{BASE_URL}/oauth2callback"
-        
-        # Log detailed information about the authorization attempt
+        # Use the exact REDIRECT_URI that was configured
         logger.info(f"==== AUTHORIZATION DEBUG INFO ====")
         logger.info(f"User ID: {user_id}")
-        logger.info(f"Redirect URI: {redirect_uri}")
+        logger.info(f"Using redirect URI: {REDIRECT_URI}")
         
         # Log client info (without sensitive parts)
         if isinstance(CLIENT_SECRETS, dict):
@@ -98,23 +100,23 @@ async def authorize(request: Request, user_id: str):
                 redirect_uris = CLIENT_SECRETS['web'].get('redirect_uris', [])
                 logger.info(f"Client ID: {client_id}")
                 logger.info(f"Auth URI: {auth_uri}")
-                logger.info(f"Configured redirect URIs: {redirect_uris}")
+                logger.info(f"Configured redirect URIs in client secrets: {redirect_uris}")
                 
                 # Check if our redirect URI is in the configured list
-                if redirect_uri not in redirect_uris:
-                    logger.error(f"⚠️ CRITICAL: Redirect URI {redirect_uri} is not in the configured redirect URIs list!")
+                if REDIRECT_URI not in redirect_uris:
+                    logger.error(f"⚠️ CRITICAL: Redirect URI {REDIRECT_URI} is not in the configured redirect URIs list!")
+                    logger.error(f"⚠️ Add this EXACT URI to your Google Cloud Console. URI validation is strict!")
             else:
                 logger.error("OAuth client configuration missing 'web' section")
         
-        # Create the OAuth flow
         flow = Flow.from_client_config(
             client_config=CLIENT_SECRETS,
             scopes=SCOPES,
-            redirect_uri=redirect_uri
+            redirect_uri=REDIRECT_URI
         )
 
         # Generate authorization URL with additional parameters for testing
-        # Include the user_id in the state parameter to retrieve it in the callback
+        # Include the user_id in the state parameter to retrieve it in callback
         authorization_url, state = flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
@@ -147,18 +149,17 @@ async def oauth2callback(request: Request, state: str = None, code: str = None, 
         logger.error(f"OAuth error: {error}")
         return {"error": error}
 
-    # Get user_id from state or query parameters
-    user_id = query_params.get('user_id')
+    # Get user_id from state parameter (this is where we stored it earlier)
+    user_id = state
     
     # Log detailed information about the callback
     logger.info(f"==== OAUTH CALLBACK DEBUG INFO ====")
-    logger.info(f"State: {state}")
-    logger.info(f"Code: {code is not None}")  # Just log if code exists, not the actual code
-    logger.info(f"User ID: {user_id}")
+    logger.info(f"State (contains user_id): {state}")
+    logger.info(f"Code present: {code is not None}")  # Just log if code exists, not the actual code
     logger.info(f"Active flows: {list(active_flows.keys())}")
     
     if not user_id or user_id not in active_flows:
-        logger.error("Invalid or missing user_id in callback")
+        logger.error("Invalid or missing user_id in callback state")
         return {"error": "Invalid or missing user_id. Make sure to use the !connect_google command again."}
 
     try:
