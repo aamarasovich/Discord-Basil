@@ -5,10 +5,14 @@ import os
 from discord.ext import commands
 from dotenv import load_dotenv
 import pathlib
-import logging  # Added logging
+import logging
 import uvicorn
 import threading
-from web_server import app, BASE_URL
+from fastapi import FastAPI, Request
+from starlette.responses import RedirectResponse
+from google_auth_oauthlib.flow import Flow
+from web_server import app as web_app, BASE_URL, active_flows, CLIENT_SECRETS, SCOPES
+from google_services import save_user_credentials
 
 # Load environment variables
 load_dotenv()
@@ -24,6 +28,9 @@ logger = logging.getLogger("discord")
 intents = discord.Intents.default()
 intents.message_content = True  # Allows access to message content
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+# Create FastAPI app
+app = web_app  # Use the app from web_server.py
 
 # Log when bot is ready
 @bot.event
@@ -56,18 +63,6 @@ async def load_cogs():
     else:
         logger.error(f"❌ Commands directory not found: {commands_dir}")
 
-# Start the Discord bot
-async def run_bot():
-    logger.info("🚀 Starting Discord bot...")
-    await load_cogs()  # ✅ Load cogs before starting
-    await bot.start(os.getenv("DISCORD_BOT_TOKEN"))
-
-# Start the web server
-def run_web_server():
-    logger.info("🌐 Starting web server...")
-    port = int(os.getenv("PORT", 8000))  # Use PORT env var or default to 8000
-    uvicorn.run(app, host="0.0.0.0", port=port)
-
 # Create a Discord command to start OAuth process
 @bot.command(name="connect_google")
 async def connect_google(ctx):
@@ -75,13 +70,34 @@ async def connect_google(ctx):
     user_id = str(ctx.author.id)
     auth_url = f"{BASE_URL}/authorize?user_id={user_id}"
     
+    logger.info(f"Generated auth URL for user {user_id}: {auth_url}")
     await ctx.author.send(f"Click this link to connect your Google account to Discord-Basil:\n{auth_url}")
     await ctx.send("I've sent you a DM with instructions to connect your Google account!")
 
+# Start the Discord bot
+async def run_bot():
+    logger.info("🚀 Starting Discord bot...")
+    await load_cogs()
+    await bot.start(os.getenv("DISCORD_BOT_TOKEN"))
+
+# Start the web server
+def run_web_server():
+    logger.info("🌐 Starting web server...")
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
+
+# Main entry point for Railway
 if __name__ == "__main__":
-    # Start the web server in a separate thread
-    server_thread = threading.Thread(target=run_web_server, daemon=True)
-    server_thread.start()
+    # Check if we're running as the web service or the Discord bot
+    is_web = os.environ.get("RAILWAY_SERVICE_NAME", "").lower() == "web"
     
-    # Start the bot in the main thread
-    asyncio.run(run_bot())
+    if is_web:
+        # Running as a web service
+        logger.info("Starting in web service mode...")
+        run_web_server()
+    else:
+        # Running as the Discord bot with the web server in a thread
+        logger.info("Starting in bot+web mode...")
+        server_thread = threading.Thread(target=run_web_server, daemon=True)
+        server_thread.start()
+        asyncio.run(run_bot())
