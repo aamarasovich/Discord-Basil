@@ -68,7 +68,12 @@ async def load_cogs():
 async def connect_google(ctx):
     """Connect your Discord account to Google services for personal calendar and tasks"""
     user_id = str(ctx.author.id)
-    auth_url = f"{BASE_URL}/authorize?user_id={user_id}"
+    
+    # Ensure the URL has the protocol prefix
+    if BASE_URL.startswith(('http://', 'https://')):
+        auth_url = f"{BASE_URL}/authorize?user_id={user_id}"
+    else:
+        auth_url = f"https://{BASE_URL}/authorize?user_id={user_id}"
     
     logger.info(f"Generated auth URL for user {user_id}: {auth_url}")
     await ctx.author.send(f"Click this link to connect your Google account to Discord-Basil:\n{auth_url}")
