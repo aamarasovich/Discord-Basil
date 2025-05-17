@@ -1,6 +1,5 @@
 import asyncio
 import discord
-import openai
 import os
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -16,9 +15,6 @@ logger = logging.getLogger("discord")
 
 # Load environment variables
 load_dotenv()
-
-# Initialize OpenAI client
-openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Discord bot setup
 intents = discord.Intents.default()
@@ -55,9 +51,8 @@ async def load_cogs():
 # Start the Discord bot
 async def run_bot():
     logger.info("Starting Discord bot...")
-    await bot.load_extension('error_handlers')  # Load error handlers first
-    await load_cogs()  # Then load other cogs
-    await bot.start(os.getenv("DISCORD_BOT_TOKEN"))
+    await load_cogs()
+    await bot.start(os.getenv("DISCORD_TOKEN"))
 
 # Main entry point
 if __name__ == "__main__":
