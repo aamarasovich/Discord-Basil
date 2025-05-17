@@ -3,6 +3,7 @@ from discord.ext import commands
 import os
 import json
 import logging
+from web_server import BASE_URL, REDIRECT_URI
 
 logger = logging.getLogger(__name__)
 

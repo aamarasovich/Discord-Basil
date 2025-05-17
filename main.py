@@ -7,15 +7,18 @@ from dotenv import load_dotenv
 import pathlib
 import logging
 
+# Set up logging first, before any other operations
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(levelname)s:%(name)s: %(message)s'
+)
+logger = logging.getLogger("discord")
+
 # Load environment variables
 load_dotenv()
 
 # Initialize OpenAI client
 openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("discord")
 
 # Discord bot setup
 intents = discord.Intents.default()
@@ -51,7 +54,7 @@ async def load_cogs():
 
 # Start the Discord bot
 async def run_bot():
-    logger.info("🚀 Starting Discord bot...")
+    logger.info("Starting Discord bot...")
     await bot.load_extension('error_handlers')  # Load error handlers first
     await load_cogs()  # Then load other cogs
     await bot.start(os.getenv("DISCORD_BOT_TOKEN"))
