@@ -3,57 +3,81 @@ from datetime import datetime, timedelta
 import discord
 from discord.ext import commands
 from discord.ext.commands import BucketType
+import dateparser
+from ..config import TIMEZONE, COOLDOWN_DURATION
 
 class Reminders(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    def parse_time(self, time_input: str) -> tuple[datetime, str]:
+        """Parse various time formats and return datetime object and format used"""
+        # Try existing increment format (1h30m)
+        time_pattern = re.compile(r"((?P<hours>\d+)h)?((?P<minutes>\d+)m)?")
+        inc_match = time_pattern.search(time_input)
+        if inc_match and (inc_match.group('hours') or inc_match.group('minutes')):
+            hours = int(inc_match.group('hours') or 0)
+            minutes = int(inc_match.group('minutes') or 0)
+            return datetime.now() + timedelta(hours=hours, minutes=minutes), "increment"
+
+        # Try dateparser for natural language
+        settings = {
+            'TIMEZONE': str(TIMEZONE),
+            'RETURN_AS_TIMEZONE_AWARE': True,
+            'PREFER_DATES_FROM': 'future'
+        }
+        parsed_date = dateparser.parse(time_input, settings=settings)
+        if parsed_date:
+            return parsed_date, "natural"
+
+        raise ValueError("Could not parse time format")
+
     @commands.command(name="remindme")
-    @commands.cooldown(1, 10, BucketType.user)  # 1 use per 10 seconds per user
+    @commands.cooldown(1, COOLDOWN_DURATION, BucketType.user)
     async def remindme(self, ctx, *, time_input: str):
         """
-        Sets a reminder for the user. Accepts both time increments (e.g., '1h30m')
-        and specific date/time formats (e.g., '2025-05-10 14:30').
+        Sets a reminder. Examples:
+        !remindme 1h30m check email
+        !remindme may 18 10am doctor appointment
+        !remindme tomorrow 3pm call mom
+        !remindme 6-6 1800 team meeting
         """
         try:
-            # Extract the date/time or time increment from the input
-            match = re.match(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2})", time_input)
-            if match:
-                # Handle specific date/time format
-                time_part = match.group(1)  # Extract the matched date/time
-                reminder_time = datetime.strptime(time_part, "%Y-%m-%d %H:%M")
-                now = datetime.now()
-                if reminder_time <= now:
-                    await ctx.send("The specified time is in the past. Please provide a future time.")
-                    return
-                delay = (reminder_time - now).total_seconds()
+            # Split time and message
+            parts = time_input.split(maxsplit=1)
+            time_str = parts[0]
+            message = parts[1] if len(parts) > 1 else "Reminder!"
+            
+            if len(parts) > 1:
+                # Try parsing with potential second time part (e.g., "may 18 10am")
+                try:
+                    reminder_time, format_used = self.parse_time(f"{parts[0]} {parts[1].split()[0]}")
+                    message = " ".join(parts[1].split()[1:]) or "Reminder!"
+                except:
+                    reminder_time, format_used = self.parse_time(parts[0])
             else:
-                # Handle time increment format
-                time_pattern = re.compile(r"((?P<hours>\d+)h)?((?P<minutes>\d+)m)?")
-                match = time_pattern.search(time_input)
-                if not match:
-                    await ctx.send("Invalid time format. Use '1h30m' for increments or 'YYYY-MM-DD HH:MM' for specific times.")
-                    return
+                reminder_time, format_used = self.parse_time(time_str)
 
-                time_data = match.groupdict()
-                hours = int(time_data['hours']) if time_data['hours'] else 0
-                minutes = int(time_data['minutes']) if time_data['minutes'] else 0
-                delay = timedelta(hours=hours, minutes=minutes).total_seconds()
-
-            if delay <= 0:
-                await ctx.send("The specified time is invalid. Please provide a future time.")
+            now = datetime.now(TIMEZONE)
+            if reminder_time <= now:
+                await ctx.send("⚠️ The specified time is in the past. Please provide a future time.")
                 return
 
-            # Schedule the reminder
-            reminder_message = time_input  # Include the full input as the reminder message
-            await ctx.send(f"Reminder set! I'll remind you in {time_input}.")
-            await discord.utils.sleep_until(datetime.now() + timedelta(seconds=delay))
-            await ctx.author.send(f"⏰ Reminder: {reminder_message}")
+            delay = (reminder_time - now).total_seconds()
+            readable_time = reminder_time.strftime("%B %d at %I:%M %p")
+            
+            await ctx.send(f"✅ Reminder set for {readable_time}!\nI'll remind you: {message}")
+            await discord.utils.sleep_until(reminder_time)
+            await ctx.author.send(f"⏰ Reminder: {message}")
 
-        except commands.CommandOnCooldown as e:
-            await ctx.send(f"You're using this command too frequently. Try again in {round(e.retry_after, 2)} seconds.")
+        except ValueError as ve:
+            await ctx.send("❌ Invalid time format. Try examples like:\n"
+                         "• `1h30m`\n"
+                         "• `may 18 10am`\n"
+                         "• `tomorrow 3pm`\n"
+                         "• `6-6 1800`")
         except Exception as e:
-            await ctx.send(f"An error occurred: {e}")
+            await ctx.send(f"An error occurred: {str(e)}")
 
 async def setup(bot):
     await bot.add_cog(Reminders(bot))

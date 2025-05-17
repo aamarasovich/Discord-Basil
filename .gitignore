@@ -1,0 +1,4 @@
+# ...existing code...
+.env
+.env.*
+!.env.example

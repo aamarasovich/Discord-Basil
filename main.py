@@ -49,10 +49,15 @@ async def load_cogs():
     else:
         logger.error(f"❌ Commands directory not found: {commands_dir}")
 
+# Load the ErrorHandlers cog
+async def setup():
+    await bot.load_extension('error_handlers')
+    await load_cogs()  # ✅ Load cogs before starting
+
 # Start the bot
 async def run_bot():
     logger.info("🚀 Starting Discord bot...")
-    await load_cogs()  # ✅ Load cogs before starting
+    await setup()
     await bot.start(os.getenv("DISCORD_BOT_TOKEN"))
 
 if __name__ == "__main__":

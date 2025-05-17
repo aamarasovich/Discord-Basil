@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO)
 
 def get_google_services():
     """
-    Initializes Google Calendar and Tasks services using credentials from the environment.
+    Initializes Google Calendar and Tasks services using credentials from environment variable.
     """
     try:
         # Load credentials from the environment variable
@@ -24,10 +24,14 @@ def get_google_services():
         # Parse the JSON string into a dictionary
         credentials_dict = json.loads(credentials_json)
 
-        # Create credentials object
-        credentials = Credentials.from_service_account_info(credentials_dict)
+        # Create credentials object with necessary scopes
+        credentials = Credentials.from_service_account_info(
+            credentials_dict,
+            scopes=['https://www.googleapis.com/auth/calendar.readonly',
+                   'https://www.googleapis.com/auth/tasks.readonly']
+        )
 
-        # Initialize Google Calendar and Tasks services with cache_discovery=False
+        # Initialize services
         calendar_service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
         tasks_service = build("tasks", "v1", credentials=credentials, cache_discovery=False)
 
@@ -123,11 +127,6 @@ class Today(commands.Cog):
     @commands.command(name="today")
     async def today(self, ctx):
         try:
-            # Debug: Check if GOOGLE_CREDENTIALS_JSON is accessible
-            if not os.getenv("GOOGLE_CREDENTIALS_JSON"):
-                await ctx.send("GOOGLE_CREDENTIALS_JSON is not set in the environment.")
-                return
-
             # Initialize Google services
             calendar_service, tasks_service = get_google_services()
 
