@@ -1,7 +1,6 @@
 import discord
 from discord.ext import commands
-from google_services import get_google_services, get_today_events, get_today_tasks, list_calendars, list_task_lists, load_user_credentials
-import os
+from google_services import get_google_services, get_today_events, get_today_tasks
 import logging
 from datetime import datetime
 import pytz
@@ -29,12 +28,9 @@ class Today(commands.Cog):
             # Send loading message
             loading_msg = await ctx.send("📅 Fetching your schedule...")
 
-            # Get the user's Discord ID
-            user_id = str(ctx.author.id)
-            
             try:
-                # Initialize Google services with user's credentials
-                calendar_service, tasks_service = get_google_services(user_id)
+                # Initialize Google services
+                calendar_service, tasks_service = get_google_services()
                 
                 # Fetch data
                 events = get_today_events(calendar_service)
