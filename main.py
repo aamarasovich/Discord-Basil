@@ -37,10 +37,6 @@ app = web_app  # Use the app from web_server.py
 async def on_ready():
     logger.info(f"✅ Logged in as {bot.user}")
     
-    # Log OAuth information
-    logger.info(f"🔗 OAuth Redirect URI for Google Console setup: {BASE_URL}/oauth2callback")
-    logger.info("ℹ️ Make sure to add this URI to your Google Cloud Console's Authorized redirect URIs")
-    
     # Debug: List all registered commands
     command_list = [cmd.name for cmd in bot.commands]
     logger.info(f"🛠 Registered commands: {command_list}")
@@ -63,38 +59,11 @@ async def load_cogs():
     else:
         logger.error(f"❌ Commands directory not found: {commands_dir}")
 
-<<<<<<< HEAD
-# Load the ErrorHandlers cog
-async def setup():
-    await bot.load_extension('error_handlers')
-    await load_cogs()  # ✅ Load cogs before starting
-
-# Start the bot
-async def run_bot():
-    logger.info("🚀 Starting Discord bot...")
-    await setup()
-=======
-# Create a Discord command to start OAuth process
-@bot.command(name="connect_google")
-async def connect_google(ctx):
-    """Connect your Discord account to Google services for personal calendar and tasks"""
-    user_id = str(ctx.author.id)
-    
-    # Ensure the URL has the protocol prefix
-    if BASE_URL.startswith(('http://', 'https://')):
-        auth_url = f"{BASE_URL}/authorize?user_id={user_id}"
-    else:
-        auth_url = f"https://{BASE_URL}/authorize?user_id={user_id}"
-    
-    logger.info(f"Generated auth URL for user {user_id}: {auth_url}")
-    await ctx.author.send(f"Click this link to connect your Google account to Discord-Basil:\n{auth_url}")
-    await ctx.send("I've sent you a DM with instructions to connect your Google account!")
-
 # Start the Discord bot
 async def run_bot():
     logger.info("🚀 Starting Discord bot...")
-    await load_cogs()
->>>>>>> e3673f0b67278ad62040dc153705673fbe6886c8
+    await bot.load_extension('error_handlers')  # Load error handlers first
+    await load_cogs()  # Then load other cogs
     await bot.start(os.getenv("DISCORD_BOT_TOKEN"))
 
 # Start the web server

@@ -2,131 +2,35 @@ import os
 import json
 import logging
 from google.oauth2.service_account import Credentials
-from google.oauth2.credentials import Credentials as UserCredentials
 from googleapiclient.discovery import build
-from datetime import datetime, timezone
-import pytz  # Import pytz for timezone handling
+from datetime import datetime
+import pytz
 from discord.ext import commands
-import pickle
-import os.path
 
 # Set up logging
 logger = logging.getLogger("google_services")
 logging.basicConfig(level=logging.INFO)
 
-# Directory to store user credentials
-CREDENTIALS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'user_credentials')
-os.makedirs(CREDENTIALS_DIR, exist_ok=True)
-
-def get_user_credentials_path(user_id):
-    """Get the path to a user's credentials file"""
-    return os.path.join(CREDENTIALS_DIR, f'user_{user_id}.pickle')
-
-def save_user_credentials(user_id, credentials):
-    """Save OAuth credentials for a user"""
-    try:
-        credentials_path = get_user_credentials_path(user_id)
-        with open(credentials_path, 'wb') as token:
-            pickle.dump(credentials, token)
-        logger.info(f"Saved credentials for user {user_id}")
-        return True
-    except Exception as e:
-        logger.error(f"Error saving user credentials: {e}")
-        return False
-
-def load_user_credentials(user_id):
-    """Load OAuth credentials for a user if they exist"""
-    credentials_path = get_user_credentials_path(user_id)
-    if os.path.exists(credentials_path):
-        with open(credentials_path, 'rb') as token:
-            credentials = pickle.load(token)
-        return credentials
-    return None
-
-def get_google_services(user_id=None):
+def get_google_services():
     """
-<<<<<<< HEAD
-    Initializes Google Calendar and Tasks services using credentials from environment variable.
-=======
-    Initializes Google Calendar and Tasks services.
-    If user_id is provided, tries to use their OAuth credentials.
-    Otherwise falls back to service account credentials from environment.
->>>>>>> e3673f0b67278ad62040dc153705673fbe6886c8
+    Initializes Google Calendar and Tasks services using service account credentials.
     """
     try:
-        # If user_id is provided, try to load their credentials
-        if user_id:
-            credentials = load_user_credentials(user_id)
-            if credentials:
-                logger.info(f"Using OAuth credentials for user {user_id}")
-                calendar_service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
-                tasks_service = build("tasks", "v1", credentials=credentials, cache_discovery=False)
-                
-                # Test connection
-                calendar_service.calendarList().list(maxResults=1).execute()
-                logger.info("Successfully connected to Google Calendar API with user credentials")
-                return calendar_service, tasks_service
-            else:
-                logger.info(f"No saved credentials found for user {user_id}")
-                # If we're explicitly looking for user credentials but didn't find any,
-                # raise an error rather than falling back to service account
-                raise ValueError("User has not connected their Google account yet")
-        
-        # Only use service account if not looking for user-specific credentials
-        logger.info("Using service account credentials")
-        
-        # Load credentials from the environment variable
         credentials_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
         if not credentials_json:
             raise ValueError("GOOGLE_CREDENTIALS_JSON environment variable is not set.")
 
-        # Parse the JSON string into a dictionary
         credentials_dict = json.loads(credentials_json)
-        
-        # Check credential type
-        if 'type' in credentials_dict and credentials_dict['type'] == 'service_account':
-            # Validate required fields for service account
-            required_fields = ['client_email', 'private_key', 'token_uri']
-            missing_fields = [field for field in required_fields if field not in credentials_dict]
-            
-            if missing_fields:
-                missing_fields_str = ', '.join(missing_fields)
-                raise ValueError(f"Service account credentials missing required fields: {missing_fields_str}")
-            
-            # Create service account credentials
-            logger.info("Using service account for authentication")
-            credentials = Credentials.from_service_account_info(credentials_dict)
-            
-            # Initialize Google Calendar and Tasks services with cache_discovery=False
-            calendar_service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
-            tasks_service = build("tasks", "v1", credentials=credentials, cache_discovery=False)
-
-<<<<<<< HEAD
-        # Create credentials object with necessary scopes
         credentials = Credentials.from_service_account_info(
             credentials_dict,
             scopes=['https://www.googleapis.com/auth/calendar.readonly',
                    'https://www.googleapis.com/auth/tasks.readonly']
         )
-
-        # Initialize services
+        
         calendar_service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
         tasks_service = build("tasks", "v1", credentials=credentials, cache_discovery=False)
 
         return calendar_service, tasks_service
-=======
-            # Test the connection by making a simple API call
-            calendar_service.calendarList().list(maxResults=1).execute()
-            logger.info("Successfully connected to Google Calendar API with service account")
-            
-            return calendar_service, tasks_service
-        else:
-            # We have OAuth client credentials, not service account credentials
-            raise ValueError("OAuth client credentials detected instead of service account credentials.")
-    except ValueError as ve:
-        logger.error(f"Credentials error: {ve}")
-        raise
->>>>>>> e3673f0b67278ad62040dc153705673fbe6886c8
     except Exception as e:
         logger.error(f"Error initializing Google services: {e}")
         raise
