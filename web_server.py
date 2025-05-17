@@ -1,0 +1,246 @@
+import os
+import json
+import logging
+from fastapi import FastAPI, Request
+from google_auth_oauthlib.flow import Flow  # Corrected import
+from googleapiclient.discovery import build
+import uvicorn
+from google.oauth2.credentials import Credentials
+from starlette.responses import RedirectResponse
+from google_services import save_user_credentials
+
+# Set up logging
+logger = logging.getLogger("web_server")
+logging.basicConfig(level=logging.INFO)
+
+app = FastAPI()
+
+# Get the port from environment or default to 8000
+PORT = int(os.getenv("PORT", 8000))
+
+# Get the base URL from environment - CRITICAL for OAuth redirect URI validation
+# Google strictly validates redirect URIs for security reasons
+BASE_URL = os.getenv("BASE_URL", "").strip()
+REDIRECT_URI = None
+
+if not BASE_URL:
+    # Try Railway-specific environment variables
+    railway_static_url = os.getenv("RAILWAY_STATIC_URL", "").strip()
+    railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
+    railway_service_id = os.getenv("RAILWAY_SERVICE_ID", "").strip()
+    
+    if railway_static_url:
+        BASE_URL = f"https://{railway_static_url}"
+    elif railway_domain:
+        BASE_URL = f"https://{railway_domain}"
+    elif railway_service_id:
+        BASE_URL = f"https://{railway_service_id}.up.railway.app"
+    else:
+        # We're not on Railway or can't detect URL, use localhost
+        BASE_URL = f"http://localhost:{PORT}"
+
+# Configure the exact OAuth redirect URI - must match exactly what's in Google Console
+REDIRECT_URI = f"{BASE_URL}/oauth2callback"
+
+# Log detailed information about URL detection
+logger.info(f"🔗 Detected BASE_URL: {BASE_URL}")
+logger.info(f"🔗 OAuth Redirect URI (MUST match Google Console): {REDIRECT_URI}")
+logger.info(f"🚨 Double-check that this EXACT URI is listed in Google Cloud Console")
+logger.info(f"🌐 Running web server on port: {PORT}")
+logger.info(f"🌐 Environment variables:")
+logger.info(f"   - PORT={os.getenv('PORT')}")
+logger.info(f"   - BASE_URL={os.getenv('BASE_URL')}")
+logger.info(f"   - RAILWAY_STATIC_URL={os.getenv('RAILWAY_STATIC_URL')}")
+logger.info(f"   - RAILWAY_PUBLIC_DOMAIN={os.getenv('RAILWAY_PUBLIC_DOMAIN')}")
+logger.info(f"   - RAILWAY_SERVICE_ID={os.getenv('RAILWAY_SERVICE_ID')}")
+
+# Google OAuth configuration
+CLIENT_SECRETS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
+if CLIENT_SECRETS_JSON:
+    CLIENT_SECRETS = json.loads(CLIENT_SECRETS_JSON)
+    logger.info("✅ Google OAuth client secrets loaded successfully")
+else:
+    logger.error("❌ GOOGLE_CREDENTIALS_JSON environment variable not set")
+    CLIENT_SECRETS = None
+
+SCOPES = [
+    'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/tasks.readonly'
+]
+
+# Dictionary to store OAuth flows for different users
+active_flows = {}
+
+@app.get("/")
+async def root():
+    """Root endpoint to confirm the web server is running."""
+    return {"status": "Discord-Basil OAuth server is running"}
+
+@app.get("/authorize")
+async def authorize(request: Request, user_id: str):
+    """
+    Start the OAuth flow for a specific Discord user.
+    """
+    if not CLIENT_SECRETS:
+        logger.error("OAuth client secrets not available")
+        return {"error": "OAuth configuration not available"}
+
+    try:
+        # Create a flow instance to manage the OAuth 2.0 Authorization Grant Flow
+        # Use the exact REDIRECT_URI that was configured
+        logger.info(f"==== AUTHORIZATION DEBUG INFO ====")
+        logger.info(f"User ID: {user_id}")
+        logger.info(f"Using redirect URI: {REDIRECT_URI}")
+        
+        # Log client info (without sensitive parts) for debugging
+        if isinstance(CLIENT_SECRETS, dict):
+            logger.info(f"Client type: {next(iter(CLIENT_SECRETS.keys()), 'unknown')}")  # 'web' or 'installed'
+            
+            if 'web' in CLIENT_SECRETS:
+                client_id = CLIENT_SECRETS['web'].get('client_id', 'Not found')
+                auth_uri = CLIENT_SECRETS['web'].get('auth_uri', 'Not found')
+                redirect_uris = CLIENT_SECRETS['web'].get('redirect_uris', [])
+                logger.info(f"Client ID: {client_id}")
+                logger.info(f"Auth URI: {auth_uri}")
+                logger.info(f"Configured redirect URIs in client secrets: {redirect_uris}")
+                
+                # Check if our redirect URI is in the configured list
+                if REDIRECT_URI not in redirect_uris:
+                    logger.error(f"⚠️ CRITICAL: Redirect URI {REDIRECT_URI} is not in the configured redirect URIs list!")
+                    logger.error(f"⚠️ Please add this EXACT URI to your Google Cloud Console. URI validation is strict!")
+            
+            # Check for JavaScript origins which might also be required
+            js_origins = CLIENT_SECRETS.get('web', {}).get('javascript_origins', [])
+            if js_origins:
+                logger.info(f"JavaScript origins: {js_origins}")
+                # Get just the base URL (scheme + domain) to check against JavaScript origins
+                base_url_parts = REDIRECT_URI.split('/', 3)
+                base_url = f"{base_url_parts[0]}//{base_url_parts[2]}" if len(base_url_parts) >= 3 else ""
+                if base_url and base_url not in js_origins:
+                    logger.warning(f"⚠️ Base URL {base_url} is not in the JavaScript origins list!")
+        
+        flow = Flow.from_client_config(
+            client_config=CLIENT_SECRETS,
+            scopes=SCOPES,
+            redirect_uri=REDIRECT_URI
+        )
+
+        # Generate authorization URL with additional parameters
+        # Include the user_id in the state parameter to retrieve it in callback
+        authorization_url, state = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true',
+            prompt='consent',
+            state=user_id  # Include user_id in state to retrieve it in callback
+        )
+
+        # Store the flow object for later use in the callback
+        active_flows[user_id] = flow
+
+        logger.info(f"Generated authorization URL: {authorization_url}")
+        logger.info(f"State parameter with user_id: {state}")
+        logger.info(f"Scopes requested: {SCOPES}")
+        logger.info(f"==== END DEBUG INFO ====")
+        
+        return RedirectResponse(url=authorization_url)
+    except Exception as e:
+        logger.error(f"Error generating authorization URL: {e}")
+        return {"error": f"Failed to start authorization: {str(e)}"}
+
+@app.get("/oauth2callback")
+async def oauth2callback(request: Request, state: str = None, code: str = None, error: str = None, error_description: str = None, error_subtype: str = None):
+    """
+    Handle the OAuth 2.0 callback from Google.
+    """
+    # Log all query parameters for debugging
+    query_params = dict(request.query_params)
+    logger.info(f"OAuth callback received with params: {query_params}")
+    
+    # Handle error response from Google
+    if error:
+        error_msg = f"OAuth error: {error}"
+        if error_description:
+            error_msg += f" - {error_description}"
+        if error_subtype:
+            error_msg += f" (Subtype: {error_subtype})"
+            
+        logger.error(error_msg)
+        
+        # More detailed logging for common errors
+        if error == "invalid_request":
+            logger.error("This usually indicates a mismatch between the redirect URI in your code and Google Console.")
+            logger.error(f"Please ensure that '{REDIRECT_URI}' is EXACTLY registered in Google Cloud Console.")
+            logger.error("Also check that your OAuth consent screen is properly configured and you've added test users if still in testing mode.")
+        elif error == "access_denied":
+            logger.error("User denied access to your app or didn't complete the consent flow.")
+        
+        return {
+            "error": error,
+            "error_description": error_description,
+            "troubleshooting_help": "Please contact the administrator with this error information."
+        }
+
+    # Get user_id from state parameter (this is where we stored it earlier)
+    user_id = state
+    
+    # Log detailed information about the callback
+    logger.info(f"==== OAUTH CALLBACK DEBUG INFO ====")
+    logger.info(f"State (contains user_id): {state}")
+    logger.info(f"Code present: {code is not None}")  # Just log if code exists, not the actual code
+    logger.info(f"Active flows: {list(active_flows.keys())}")
+    
+    if not user_id or user_id not in active_flows:
+        logger.error("Invalid or missing user_id in callback state")
+        return {"error": "Invalid or missing user_id. Make sure to use the !connect_google command again."}
+
+    try:
+        flow = active_flows[user_id]
+        
+        # Use the authorization code to fetch tokens
+        flow.fetch_token(code=code)
+        
+        # Get credentials from flow
+        credentials = flow.credentials
+        
+        # Save the credentials for this user
+        saved = save_user_credentials(user_id, credentials)
+        if saved:
+            logger.info(f"Successfully saved OAuth credentials for user {user_id}")
+        else:
+            logger.error(f"Failed to save OAuth credentials for user {user_id}")
+        
+        # Clean up flow
+        del active_flows[user_id]
+        logger.info(f"==== END OAUTH CALLBACK DEBUG INFO ====")
+        
+        return {"message": "Authorization successful! You can close this window and return to Discord."}
+    except Exception as e:
+        logger.error(f"Error processing OAuth callback: {e}")
+        logger.info(f"==== END OAUTH CALLBACK DEBUG INFO ====")
+        return {"error": f"Failed to complete authorization: {str(e)}"}
+
+# Helper functions
+def save_credentials(user_id, credentials):
+    """
+    Save user credentials securely.
+    TODO: Implement proper secure storage for user credentials.
+    """
+    # This is a placeholder. You should store these securely in a database.
+    pass
+
+def get_user_google_services(user_id):
+    """
+    Get Google Calendar and Tasks services for a specific user.
+    TODO: Implement user-specific credential retrieval.
+    """
+    # Placeholder for retrieving user-specific credentials
+    # credentials = retrieve_credentials(user_id)
+    # 
+    # if not credentials:
+    #     return None, None
+    # 
+    # calendar_service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
+    # tasks_service = build("tasks", "v1", credentials=credentials, cache_discovery=False)
+    # 
+    # return calendar_service, tasks_service
+    pass
