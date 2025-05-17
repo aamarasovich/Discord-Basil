@@ -51,8 +51,11 @@ async def load_cogs():
 # Start the Discord bot
 async def run_bot():
     logger.info("Starting Discord bot...")
+    token = os.getenv("DISCORD_BOT_TOKEN")  # Changed from DISCORD_TOKEN
+    if not token:
+        raise ValueError("DISCORD_BOT_TOKEN environment variable is not set")
     await load_cogs()
-    await bot.start(os.getenv("DISCORD_TOKEN"))
+    await bot.start(token)
 
 # Main entry point
 if __name__ == "__main__":
