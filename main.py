@@ -6,13 +6,6 @@ from discord.ext import commands
 from dotenv import load_dotenv
 import pathlib
 import logging
-import uvicorn
-import threading
-from fastapi import FastAPI, Request
-from starlette.responses import RedirectResponse
-from google_auth_oauthlib.flow import Flow
-from web_server import app as web_app, BASE_URL, active_flows, CLIENT_SECRETS, SCOPES
-from google_services import save_user_credentials
 
 # Load environment variables
 load_dotenv()
@@ -28,9 +21,6 @@ logger = logging.getLogger("discord")
 intents = discord.Intents.default()
 intents.message_content = True  # Allows access to message content
 bot = commands.Bot(command_prefix="!", intents=intents)
-
-# Create FastAPI app
-app = web_app  # Use the app from web_server.py
 
 # Log when bot is ready
 @bot.event
@@ -66,24 +56,6 @@ async def run_bot():
     await load_cogs()  # Then load other cogs
     await bot.start(os.getenv("DISCORD_BOT_TOKEN"))
 
-# Start the web server
-def run_web_server():
-    logger.info("🌐 Starting web server...")
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
-
-# Main entry point for Railway
+# Main entry point
 if __name__ == "__main__":
-    # Check if we're running as the web service or the Discord bot
-    is_web = os.environ.get("RAILWAY_SERVICE_NAME", "").lower() == "web"
-    
-    if is_web:
-        # Running as a web service
-        logger.info("Starting in web service mode...")
-        run_web_server()
-    else:
-        # Running as the Discord bot with the web server in a thread
-        logger.info("Starting in bot+web mode...")
-        server_thread = threading.Thread(target=run_web_server, daemon=True)
-        server_thread.start()
-        asyncio.run(run_bot())
+    asyncio.run(run_bot())
