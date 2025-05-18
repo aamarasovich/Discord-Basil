@@ -1,6 +1,6 @@
 import discord
 import asyncio
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord.ext.commands import BucketType, CommandOnCooldown
 import os
 from dotenv import load_dotenv
@@ -8,9 +8,6 @@ from dotenv import load_dotenv
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
-
-# A dictionary to store reminders for each user
-reminders = {}
 
 # A function to convert time strings to seconds
 def convert_time_to_seconds(time_str):
@@ -34,39 +31,34 @@ def convert_time_to_seconds(time_str):
     except Exception as e:
         return None
 
+async def set_reminder(ctx, target: discord.Member, time: str, reminder: str):
+    """Shared reminder logic for all reminder commands"""
+    seconds = convert_time_to_seconds(time)
+    if seconds is None:
+        await ctx.send("Invalid time format. Please use format like '1h30m', '2d', '45s', etc.")
+        return False
+    
+    @tasks.loop(count=1)
+    async def reminder_task():
+        await asyncio.sleep(seconds)
+        await ctx.send(f"{target.mention} Reminder: {reminder}")
+        
+    reminder_task.start()
+    return True
+
 # A command to set a reminder
 @bot.command()
+@commands.cooldown(1, 60, BucketType.user)  # 1 use per 60 seconds per user
 async def remind(ctx, time: str, *, reminder: str):
-    try:
-        # Convert time string to seconds
-        seconds = convert_time_to_seconds(time)
-        if seconds is None:
-            await ctx.send("Invalid time format. Please use format like '1h30m', '2d', '45s', etc.")
-            return
-        
-        # Set reminder
-        await ctx.send(f"Reminder set for {ctx.author.mention}: '{reminder}' in {time}")
-        await asyncio.sleep(seconds)
-        await ctx.send(f"{ctx.author.mention} Reminder: {reminder}")
-        
-    except Exception as e:
-        await ctx.send(f"Error setting reminder: {str(e)}")
+    """Alias for remindme"""
+    await remindme(ctx, time, reminder=reminder)
 
 @bot.command()
 @commands.cooldown(1, 60, BucketType.user)  # 1 use per 60 seconds per user
 async def remindme(ctx, time: str, *, reminder: str):
     try:
-        # Convert time string to seconds
-        seconds = convert_time_to_seconds(time)
-        if seconds is None:
-            await ctx.send("Invalid time format. Please use format like '1h30m', '2d', '45s', etc.")
-            return
-        
-        # Set reminder
-        await ctx.send(f"I'll remind you about '{reminder}' in {time}")
-        await asyncio.sleep(seconds)
-        await ctx.send(f"{ctx.author.mention} Reminder: {reminder}")
-        
+        if await set_reminder(ctx, ctx.author, time, reminder):
+            await ctx.send(f"I'll remind you about '{reminder}' in {time}")
     except Exception as e:
         await ctx.send(f"Error setting reminder: {str(e)}")
 
@@ -74,17 +66,8 @@ async def remindme(ctx, time: str, *, reminder: str):
 @commands.cooldown(1, 60, BucketType.user)  # 1 use per 60 seconds per user
 async def remindyou(ctx, member: discord.Member, time: str, *, reminder: str):
     try:
-        # Convert time string to seconds
-        seconds = convert_time_to_seconds(time)
-        if seconds is None:
-            await ctx.send("Invalid time format. Please use format like '1h30m', '2d', '45s', etc.")
-            return
-        
-        # Set reminder
-        await ctx.send(f"Reminder set for {member.mention}: '{reminder}' in {time}")
-        await asyncio.sleep(seconds)
-        await ctx.send(f"{member.mention} Reminder: {reminder}")
-        
+        if await set_reminder(ctx, member, time, reminder):
+            await ctx.send(f"Reminder set for {member.mention}: '{reminder}' in {time}")
     except Exception as e:
         await ctx.send(f"Error setting reminder: {str(e)}")
 
@@ -103,12 +86,7 @@ async def on_ready():
     # Change the bot's status to "online"
     await bot.change_presence(status=discord.Status.online)
 
-async def load_cogs():
-    # Your cog loading logic here
-    pass
-
 async def main():
-    await load_cogs()
     TOKEN = os.getenv('DISCORD_TOKEN')
     await bot.start(TOKEN)
 
