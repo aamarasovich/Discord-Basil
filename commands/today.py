@@ -1,10 +1,9 @@
 import discord
 from discord.ext import commands
-from google_services import get_google_services, get_today_events, get_today_tasks, list_calendars, list_task_lists, load_user_credentials
-import os
+from google_services import get_google_services, get_today_events, get_today_tasks
 import logging
-from datetime import datetime
 import pytz
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +28,9 @@ class Today(commands.Cog):
             # Send loading message
             loading_msg = await ctx.send("📅 Fetching your schedule...")
 
-            # Get the user's Discord ID
-            user_id = str(ctx.author.id)
-            
             try:
-                # Initialize Google services with user's credentials
-                calendar_service, tasks_service = get_google_services(user_id)
+                # Initialize Google services
+                calendar_service, tasks_service = get_google_services()
                 
                 # Fetch data
                 events = get_today_events(calendar_service)
@@ -61,20 +57,11 @@ class Today(commands.Cog):
                 # Edit the loading message with the results
                 await loading_msg.edit(content=response)
                 
-            except ValueError:
-                # If no valid user credentials, prompt them to connect
-                embed = discord.Embed(
-                    title="Google Calendar Not Connected",
-                    description="You need to connect your Google account to use this command.",
-                    color=discord.Color.blue()
-                )
-                embed.add_field(
-                    name="Connect Your Account", 
-                    value=f"Use the `!connect_google` command to connect your Google Calendar and Tasks."
-                )
-                embed.set_footer(text="Your data will only be accessible to you.")
-                
-                await loading_msg.edit(content="", embed=embed)
+            except Exception as e:
+                # If there's an error with Google services, show a generic error message
+                error_msg = "⚠️ Error retrieving your schedule. Please try again later."
+                logger.error(f"Error in 'today' command: {str(e)}")
+                await loading_msg.edit(content=error_msg)
 
         except Exception as e:
             error_msg = "⚠️ Error retrieving your schedule. Please try again later."

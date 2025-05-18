@@ -5,6 +5,7 @@ from discord.ext import commands
 from dotenv import load_dotenv
 import pathlib
 import logging
+import sys
 
 # Set up logging first, before any other operations
 logging.basicConfig(
@@ -30,32 +31,69 @@ async def on_ready():
     command_list = [cmd.name for cmd in bot.commands]
     logger.info(f"🛠 Registered commands: {command_list}")
 
-# Load all Cogs from the 'commands' directory
 async def load_cogs():
-    # Ensure we use an absolute path to locate the 'commands' directory
+    """Load all cogs with proper error handling"""
     base_dir = pathlib.Path(__file__).parent
     commands_dir = base_dir / "commands"
 
-    if commands_dir.exists():
-        for command_file in commands_dir.glob("*.py"):
-            if command_file.stem != "__init__":  # Avoid loading __init__.py
-                module_name = f"commands.{command_file.stem}"
-                try:
-                    await bot.load_extension(module_name)
-                    logger.info(f"✅ Loaded cog: {module_name}")
-                except Exception as e:
-                    logger.error(f"❌ Failed to load {module_name}: {e}")
-    else:
+    # First load error handlers
+    try:
+        await bot.load_extension('error_handlers')
+        logger.info("✅ Loaded error handlers")
+    except Exception as e:
+        logger.error(f"❌ Failed to load error handlers: {e}")
+        return False
+
+    if not commands_dir.exists():
         logger.error(f"❌ Commands directory not found: {commands_dir}")
+        return False
+
+    success = True
+    for command_file in commands_dir.glob("*.py"):
+        if command_file.stem != "__init__":
+            module_name = f"commands.{command_file.stem}"
+            try:
+                await bot.load_extension(module_name)
+                logger.info(f"✅ Loaded cog: {module_name}")
+            except Exception as e:
+                logger.error(f"❌ Failed to load {module_name}: {e}")
+                success = False
+
+    return success
+
+def validate_environment():
+    """Validate required environment variables before starting"""
+    required_vars = {
+        "DISCORD_BOT_TOKEN": "Discord bot token",
+        "GOOGLE_CREDENTIALS_JSON": "Google service account credentials"
+    }
+    missing = []
+    for var, desc in required_vars.items():
+        if not os.getenv(var):
+            missing.append(f"{var} ({desc})")
+    
+    if missing:
+        logger.error("Missing required environment variables:")
+        for var in missing:
+            logger.error(f"- {var}")
+        return False
+    return True
 
 # Start the Discord bot
 async def run_bot():
-    logger.info("Starting Discord bot...")
-    token = os.getenv("DISCORD_BOT_TOKEN")  # Changed from DISCORD_TOKEN
-    if not token:
-        raise ValueError("DISCORD_BOT_TOKEN environment variable is not set")
-    await load_cogs()
-    await bot.start(token)
+    """Start the bot with error handling"""
+    try:
+        logger.info("Starting Discord bot...")
+        if not validate_environment():
+            sys.exit(1)
+            
+        if not await load_cogs():
+            logger.warning("Some cogs failed to load, but continuing with available commands")
+            
+        await bot.start(os.getenv("DISCORD_BOT_TOKEN"))
+    except Exception as e:
+        logger.error(f"Fatal error: {str(e)}")
+        sys.exit(1)
 
 # Main entry point
 if __name__ == "__main__":

@@ -10,17 +10,21 @@ class ErrorHandlers(commands.Cog):
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
-        if isinstance(error, commands.CommandOnCooldown):
-            await ctx.send(f"⏳ Please wait {error.retry_after:.1f}s before using this command again.")
-        elif isinstance(error, commands.MissingPermissions):
-            await ctx.send("⛔ You don't have permission to use this command.")
-        elif isinstance(error, commands.BotMissingPermissions):
-            await ctx.send("⚠️ I don't have the required permissions to do that.")
-        elif isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send(f"❌ Missing required argument: {error.param.name}")
-        else:
-            logger.error(f"Unhandled error: {error}")
-            await ctx.send("An unexpected error occurred. Please try again later.")
+        """Handle common command errors"""
+        try:
+            if isinstance(error, commands.CommandNotFound):
+                return
+            elif isinstance(error, commands.MissingPermissions):
+                await ctx.send("❌ You don't have permission to use this command.")
+            elif isinstance(error, commands.BotMissingPermissions):
+                await ctx.send("❌ I don't have the required permissions to do that.")
+            elif isinstance(error, commands.CommandOnCooldown):
+                await ctx.send(f"⏳ Please wait {error.retry_after:.1f}s before using this command again.")
+            else:
+                logger.error(f"Error in {ctx.command}: {str(error)}")
+                await ctx.send("❌ An error occurred while processing your command.")
+        except Exception as e:
+            logger.error(f"Error in error handler: {str(e)}")
 
 async def setup(bot):
     await bot.add_cog(ErrorHandlers(bot))
