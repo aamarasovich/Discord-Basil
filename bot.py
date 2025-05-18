@@ -1,22 +1,12 @@
 import discord
-from discord.ext import commands
 import asyncio
-from datetime import datetime, timedelta
-import pytz
+from discord.ext import commands
+from discord.ext.commands import BucketType, CommandOnCooldown
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
-
-# Get the Discord bot token from the environment variables
-TOKEN = os.getenv('DISCORD_TOKEN')
-
-# Intents are used to specify which events the bot should receive
 intents = discord.Intents.default()
-intents.messages = True
-
-# Create an instance of the bot with the specified command prefix and intents
+intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # A dictionary to store reminders for each user
@@ -63,6 +53,7 @@ async def remind(ctx, time: str, *, reminder: str):
         await ctx.send(f"Error setting reminder: {str(e)}")
 
 @bot.command()
+@commands.cooldown(1, 60, BucketType.user)  # 1 use per 60 seconds per user
 async def remindme(ctx, time: str, *, reminder: str):
     try:
         # Convert time string to seconds
@@ -79,6 +70,32 @@ async def remindme(ctx, time: str, *, reminder: str):
     except Exception as e:
         await ctx.send(f"Error setting reminder: {str(e)}")
 
+@bot.command()
+@commands.cooldown(1, 60, BucketType.user)  # 1 use per 60 seconds per user
+async def remindyou(ctx, member: discord.Member, time: str, *, reminder: str):
+    try:
+        # Convert time string to seconds
+        seconds = convert_time_to_seconds(time)
+        if seconds is None:
+            await ctx.send("Invalid time format. Please use format like '1h30m', '2d', '45s', etc.")
+            return
+        
+        # Set reminder
+        await ctx.send(f"Reminder set for {member.mention}: '{reminder}' in {time}")
+        await asyncio.sleep(seconds)
+        await ctx.send(f"{member.mention} Reminder: {reminder}")
+        
+    except Exception as e:
+        await ctx.send(f"Error setting reminder: {str(e)}")
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, CommandOnCooldown):
+        remaining = round(error.retry_after)
+        await ctx.send(f"Please wait {remaining} seconds before using this command again.")
+    else:
+        raise error
+
 # An event that is called when the bot has connected to Discord and is ready
 @bot.event
 async def on_ready():
@@ -86,5 +103,15 @@ async def on_ready():
     # Change the bot's status to "online"
     await bot.change_presence(status=discord.Status.online)
 
-# Run the bot with the specified token
-bot.run(TOKEN)
+async def load_cogs():
+    # Your cog loading logic here
+    pass
+
+async def main():
+    await load_cogs()
+    TOKEN = os.getenv('DISCORD_TOKEN')
+    await bot.start(TOKEN)
+
+if __name__ == "__main__":
+    load_dotenv()
+    asyncio.run(main())
