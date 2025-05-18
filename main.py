@@ -1,4 +1,5 @@
 import discord
+import asyncio
 from discord.ext import commands
 import os
 from dotenv import load_dotenv
@@ -15,11 +16,17 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     print(f"✅ Logged in as {bot.user}")
 
-# Load commands
-async def load_cogs():
+async def load_extensions():
+    """Load all command extensions"""
     await bot.load_extension('commands.reminders')
+    await bot.load_extension('commands.chat')
+    await bot.load_extension('commands.user_chat')
 
-# Main entry point
+async def main():
+    """Main entry point"""
+    async with bot:
+        await load_extensions()
+        await bot.start(os.getenv("DISCORD_TOKEN"))
+
 if __name__ == "__main__":
-    bot.loop.run_until_complete(load_cogs())
-    bot.run(os.getenv("DISCORD_TOKEN"))
+    asyncio.run(main())
