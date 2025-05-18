@@ -18,14 +18,18 @@ async def on_ready():
 
 async def load_extensions():
     """Load all command extensions"""
-    try:
-        await bot.load_extension('commands.reminders')
-        await bot.load_extension('commands.chat')
-        await bot.load_extension('commands.user_chat')
-        print("✅ All extensions loaded successfully")
-    except Exception as e:
-        print(f"❌ Error loading extensions: {e}")
-        raise
+    extensions = [
+        'commands.reminders',
+        'commands.chat',
+        'commands.user_chat'
+    ]
+    
+    for extension in extensions:
+        try:
+            await bot.load_extension(extension)
+            print(f"✅ Loaded extension: {extension}")
+        except Exception as e:
+            print(f"❌ Failed to load extension {extension}: {str(e)}")
 
 async def main():
     """Main entry point"""
