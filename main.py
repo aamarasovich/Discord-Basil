@@ -3,6 +3,12 @@ import asyncio
 from discord.ext import commands
 import os
 from dotenv import load_dotenv
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger('discord')
+logger.setLevel(logging.DEBUG)
 
 # Load environment variables
 load_dotenv()
@@ -33,23 +39,33 @@ async def load_extensions():
 async def main():
     """Main entry point"""
     token = os.getenv("DISCORD_TOKEN")
-    if not token:
-        raise ValueError("DISCORD_TOKEN not found in environment variables")
+    
+    # Debug token presence and format
+    logger.debug(f"Token exists: {bool(token)}")
+    if token:
+        logger.debug(f"Token length: {len(token)}")
+        logger.debug(f"Token prefix: {token[:7]}...")  # Only show first few chars for security
+    else:
+        logger.error("NO TOKEN FOUND IN ENVIRONMENT!")
+        logger.debug(f"Available env vars: {[k for k in os.environ.keys()]}")
     
     while True:
         try:
             async with bot:
-                print("🔄 Connecting to Discord...")
+                logger.info("🔄 Connecting to Discord...")
                 await load_extensions()
+                logger.debug("Starting bot with token...")
                 await bot.start(token)
-        except discord.errors.ConnectionClosed:
-            print("🔌 Connection closed. Attempting to reconnect...")
-            await asyncio.sleep(5)
+        except discord.errors.LoginFailure as e:
+            logger.error(f"Authentication Failed: {str(e)}")
+            logger.error(f"Token type: {type(token)}")
+            logger.error(f"Environment source: {'Environment' if token in os.environ else '.env file'}")
+            raise  # Re-raise to stop the bot
         except Exception as e:
-            print(f"❌ Fatal error: {str(e)}")
-            raise
+            logger.error(f"❌ Fatal error: {str(e)}", exc_info=True)
+            await asyncio.sleep(5)
         finally:
-            print("⚠️ Bot disconnected. Attempting to reconnect in 5 seconds...")
+            logger.warning("⚠️ Bot disconnected. Attempting to reconnect in 5 seconds...")
             await asyncio.sleep(5)
 
 if __name__ == "__main__":
