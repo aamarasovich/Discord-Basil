@@ -4,6 +4,11 @@ from discord.ext import commands
 import os
 from dotenv import load_dotenv
 import logging
+import sys
+
+# Fix Windows console encoding for Unicode
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8')
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -20,20 +25,26 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f"✅ Logged in as {bot.user}")
+    print(f"[OK] Logged in as {bot.user}")
 
 @bot.event
 async def on_error(event, *args, **kwargs):
-    print(f"❌ Error in {event}: {args} {kwargs}")
+    print(f"[ERROR] Error in {event}: {args} {kwargs}")
 
 async def load_extensions():
     """Load all command extensions"""
     # Only load reminders for now
     try:
-        await bot.load_extension('commands.reminders')
-        print("✅ Loaded reminders extension")
+        # Check if extension is already loaded
+        if 'commands.reminders' in bot.extensions:
+            print("[INFO] Reminders extension already loaded")
+        else:
+            await bot.load_extension('commands.reminders')
+            print("[OK] Loaded reminders extension")
+    except discord.ext.commands.errors.ExtensionAlreadyLoaded:
+        print("[INFO] Reminders extension already loaded")
     except Exception as e:
-        print(f"❌ Error loading reminders: {e}")
+        print(f"[ERROR] Error loading reminders: {e}")
         raise  # Re-raise since reminders are essential
 
 async def main():
@@ -52,7 +63,7 @@ async def main():
     while True:
         try:
             async with bot:
-                logger.info("🔄 Connecting to Discord...")
+                logger.info("[INFO] Connecting to Discord...")
                 await load_extensions()
                 logger.debug("Starting bot with token...")
                 await bot.start(token)
@@ -62,10 +73,10 @@ async def main():
             logger.error(f"Environment source: {'Environment' if token in os.environ else '.env file'}")
             raise  # Re-raise to stop the bot
         except Exception as e:
-            logger.error(f"❌ Fatal error: {str(e)}", exc_info=True)
+            logger.error(f"[ERROR] Fatal error: {str(e)}", exc_info=True)
             await asyncio.sleep(5)
         finally:
-            logger.warning("⚠️ Bot disconnected. Attempting to reconnect in 5 seconds...")
+            logger.warning("[WARNING] Bot disconnected. Attempting to reconnect in 5 seconds...")
             await asyncio.sleep(5)
 
 if __name__ == "__main__":
